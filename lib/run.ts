@@ -2,12 +2,15 @@ import { fetchBoard } from "./ats";
 import { syncCompany } from "./companies";
 import { db, getSettings, listCompanies } from "./db";
 import { renderDigest, sendDigest, type BrokenSource, type DigestJob } from "./email";
-import { mapLimit, scoreJob, scoringEnabled } from "./scoring";
+import { mapLimit, scoringEnabled } from "./scoring";
+import { backfillScores, resumeHash, scoreTargets, type ScoreTarget } from "./score-jobs";
 
 export interface RunSummary {
   companies: { name: string; ok: boolean; total?: number; newMatching?: number; removed?: number; error?: string }[];
   scored: number;
   scoreErrors: number;
+  /** Older open jobs scored with leftover time. */
+  backfilled?: number;
   emailed: number;
   email: string;
 }
@@ -18,6 +21,7 @@ function shouldReportFailure(failures: number) {
 }
 
 export async function runDaily(opts: { dryRun?: boolean } = {}): Promise<RunSummary> {
+  const startedAt = Date.now();
   const sql = await db();
   const settings = await getSettings();
   const companies = await listCompanies();
@@ -55,26 +59,24 @@ export async function runDaily(opts: { dryRun?: boolean } = {}): Promise<RunSumm
 
   // 3. Score with Claude when there's a key and a resume. Failures leave the job unscored, not dropped.
   if (scoringEnabled() && settings.resume.trim()) {
-    const toScore = pending.filter((j) => j.score === null && j.description);
-    await mapLimit(toScore, 4, async (j) => {
-      try {
-        const m = await scoreJob(settings.resume, {
-          title: j.title,
-          company: j.company,
-          department: j.department,
-          location: j.location,
-          description: j.description,
-        });
-        if (!m) throw new Error("no structured result");
-        await sql`update jobs set score = ${m.score}, verdict = ${m.verdict}, reason = ${m.reason}, blockers = ${m.blockers}
-                  where id = ${j.id}`;
-        Object.assign(j, { score: m.score, verdict: m.verdict, reason: m.reason, blockers: m.blockers });
-        summary.scored++;
-      } catch (e) {
-        summary.scoreErrors++;
-        console.error(`scoring failed for job ${j.id}:`, (e as Error).message);
-      }
-    });
+    const hash = resumeHash(settings.resume);
+    const byId = new Map(companies.map((c) => [c.id, c]));
+    const targets: ScoreTarget[] = pending
+      .filter((j) => j.score === null || j.scored_resume_hash !== hash)
+      .map((j) => {
+        const c = byId.get(j.company_id)!;
+        return {
+          id: j.id, companyId: j.company_id, company: j.company, ats: c.ats, boardToken: c.boardToken,
+          externalId: j.external_id, title: j.title, department: j.department, location: j.location, description: j.description,
+        };
+      });
+    const res = await scoreTargets(targets, settings.resume, 150_000);
+    for (const j of pending) {
+      const m = res.results.get(j.id);
+      if (m) Object.assign(j, { score: m.score, verdict: m.verdict, reason: m.reason, blockers: m.blockers });
+    }
+    summary.scored += res.scored;
+    summary.scoreErrors += res.failed;
   }
 
   // 4. Email only when there's something to say.
@@ -104,13 +106,23 @@ export async function runDaily(opts: { dryRun?: boolean } = {}): Promise<RunSumm
         summary.email = res.info;
         if (res.sent && pending.length) {
           const ids = pending.map((j) => j.id as number);
-          // Descriptions were only kept for scoring.
-          await sql`update jobs set notified_at = now(), description = null where id = any(${ids})`;
+          await sql`update jobs set notified_at = now() where id = any(${ids})`;
           summary.emailed = ids.length;
         }
       } catch (e) {
         summary.email = `send failed: ${(e as Error).message}`;
       }
+    }
+  }
+
+  // 5. Use leftover time to score older open jobs, so the Jobs page fills in over a few days.
+  const elapsed = Date.now() - startedAt;
+  if (!opts.dryRun && scoringEnabled() && settings.resume.trim() && elapsed < 150_000) {
+    try {
+      const b = await backfillScores({ budgetMs: Math.min(90_000, 200_000 - elapsed) });
+      summary.backfilled = b.scored;
+    } catch (e) {
+      console.error("backfill failed:", (e as Error).message);
     }
   }
 

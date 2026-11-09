@@ -8,6 +8,7 @@ import { logOut, requireAuth } from "@/lib/auth";
 import { addCompany } from "@/lib/companies";
 import { db, getSettings, saveSettings } from "@/lib/db";
 import { runDaily, type RunSummary } from "@/lib/run";
+import { backfillScores, type BackfillResult } from "@/lib/score-jobs";
 import type { AtsKind } from "@/lib/types";
 
 export type PreviewState =
@@ -119,4 +120,16 @@ export async function saveSettingsAction(formData: FormData) {
 export async function logoutAction() {
   await logOut();
   redirect("/login");
+}
+
+export async function scoreJobsAction(_prev: BackfillResult | null, formData: FormData): Promise<BackfillResult> {
+  await requireAuth();
+  const ids = String(formData.get("ids") ?? "")
+    .split(",")
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n > 0);
+  // Stay well inside the 300 s function limit; the button can be clicked again to continue.
+  const res = await backfillScores({ ids: ids.length ? ids : undefined, budgetMs: 200_000 });
+  revalidatePath("/jobs");
+  return res;
 }

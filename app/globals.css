@@ -73,3 +73,11 @@ details > summary { cursor: pointer; }
   .hide-sm { display: none; }
   nav { gap: 14px; }
 }
+select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); color: var(--text); font: inherit;
+}
+.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
+.filter-field { flex: 1 1 150px; min-width: 0; }
+.filter-field label { margin-top: 0; font-size: 13px; }
+.filter-actions { display: flex; gap: 12px; align-items: center; }

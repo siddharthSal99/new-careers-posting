@@ -28,6 +28,7 @@ export async function addCompany(input: {
         is_remote: j.isRemote,
         url: j.url,
         posted_at: j.postedAt,
+        description: j.description || null,
         is_baseline: true,
         notified_at: new Date(),
       }));
@@ -59,7 +60,8 @@ export async function syncCompany(
   const sql = await db();
   return sql.begin(async (tx) => {
     const existing = await tx`
-      select id, external_id, title, location, removed_at from jobs where company_id = ${companyId}`;
+      select id, external_id, title, location, removed_at, description is null as no_description
+      from jobs where company_id = ${companyId}`;
     const byExt = new Map(existing.map((r) => [r.external_id as string, r]));
     const byKey = new Map<string, number>();
     for (const r of existing) byKey.set(repostKey(r.title, r.location), r.id);
@@ -81,7 +83,21 @@ export async function syncCompany(
     }
     if (reopenIds.length) await tx`update jobs set removed_at = null where id = any(${reopenIds})`;
     const gone = existing.filter((r) => !seen.has(r.external_id) && !r.removed_at).map((r) => r.id as number);
-    if (gone.length) await tx`update jobs set removed_at = now() where id = any(${gone})`;
+    // Descriptions are only needed while a job is open.
+    if (gone.length) await tx`update jobs set removed_at = now(), description = null where id = any(${gone})`;
+
+    // Fill in descriptions for open jobs that don't have one (jobs saved before descriptions were stored, or reopened).
+    const fetchedById = new Map(fetched.map((j) => [j.externalId, j]));
+    const fill = existing
+      .filter((r) => r.no_description && seen.has(r.external_id) && fetchedById.get(r.external_id)?.description)
+      .map((r) => ({ id: r.id as number, d: fetchedById.get(r.external_id)!.description }));
+    for (let i = 0; i < fill.length; i += 200) {
+      const chunk = fill.slice(i, i + 200);
+      await tx`
+        update jobs set description = v.d
+        from (select unnest(${chunk.map((f) => f.id)}::int[]) as id, unnest(${chunk.map((f) => f.d)}::text[]) as d) v
+        where jobs.id = v.id`;
+    }
 
     const newJobIds: number[] = [];
     for (const j of fresh) {
@@ -91,7 +107,7 @@ export async function syncCompany(
                           repost_of, description, notified_at)
         values (${companyId}, ${j.externalId}, ${j.title}, ${j.department}, ${j.location}, ${j.isRemote}, ${j.url},
                 ${j.postedAt}, ${byKey.get(repostKey(j.title, j.location)) ?? null},
-                ${f.pass ? j.description : null},
+                ${j.description || null},
                 ${f.pass ? null : tx`now()`})
         returning id`;
       if (f.pass) newJobIds.push(r.id);

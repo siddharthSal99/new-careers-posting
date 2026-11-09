@@ -32,7 +32,7 @@ create table if not exists jobs (
   is_baseline boolean not null default false,
   -- an earlier job at the same company with the same title and location
   repost_of int references jobs(id) on delete set null,
-  -- description is kept only for new jobs that still need scoring
+  -- plain-text description of open jobs (cleared when a job closes), for search and scoring
   description text,
   score int,
   verdict text,
@@ -42,6 +42,8 @@ create table if not exists jobs (
   notified_at timestamptz,
   unique (company_id, external_id)
 );
+-- added after the first release; which resume version the score was computed against
+alter table jobs add column if not exists scored_resume_hash text;
 create index if not exists jobs_pending_idx on jobs (notified_at) where notified_at is null;
 
 create table if not exists settings (

@@ -48,6 +48,13 @@ npm run dev                  # http://localhost:3000
 npm run daily -- --dry-run   # run the daily check from the command line without sending email
 ```
 
+## Jobs page
+
+- **Filters:** company, keywords, and date posted (past 24 hours, week, or month). "Show non-matching too" includes jobs outside your Settings filters.
+- **Keywords** search the title, company, department, location, AI reason and the full job description. Every term must match as a whole word (`go` doesn't match "good"); use `"quotes"` for phrases and a trailing `*` for word beginnings (`infra*`).
+- **Sort** by most recently posted or by fit score. Unscored jobs sort last.
+- **Fit scores:** new jobs are scored automatically. To score jobs that were already open when you added a company, filter to the jobs you care about and click **Score unscored jobs in this view**; each click scores for about 3 minutes, so click again to continue. The daily run also scores a batch of unscored jobs with its leftover time. If you edit your resume, existing scores are shown faded and get rescored.
+
 ## How the daily check works
 
 For each company:
@@ -57,7 +64,7 @@ For each company:
 3. Jobs with an ID we haven't seen are **new**. New jobs are checked against your filters; ones that fail are recorded but never emailed. A new job with the same title and location as an earlier one is flagged as a likely repost.
 4. Jobs that disappeared are marked removed. If one comes back, it's reopened without counting as new.
 
-Then the new matching jobs are scored (if AI matching is on) and sent in one email. Jobs are marked as emailed only after the email is sent, so a failed send is retried the next day.
+Then the new matching jobs are scored (if AI matching is on) and sent in one email. Any time left over is used to score older open jobs. Jobs are marked as emailed only after the email is sent, so a failed send is retried the next day.
 
 Changing filters affects future new jobs and the Jobs page; it never re-announces jobs you've already seen.
 
@@ -66,7 +73,8 @@ Changing filters affects future new jobs and the Jobs page; it never re-announce
 - `lib/ats/`: Greenhouse and Ashby adapters, plus board detection
 - `lib/companies.ts`: adding a company (baseline) and diffing a fresh fetch against stored jobs
 - `lib/filters.ts`: department, title and location filters
-- `lib/scoring.ts`: resume matching with Claude Haiku (structured JSON output)
+- `lib/scoring.ts`: resume matching with Claude Haiku (structured JSON output); `lib/score-jobs.ts`: time-limited batch scoring
+- `lib/search.ts`: whole-word keyword search over open jobs
 - `lib/run.ts`: the daily pipeline; `lib/email.ts`: the digest email
 - `lib/schema.ts`: database schema
 - `app/`: Next.js pages (Companies, Jobs, Settings, login) and `app/api/cron/daily`
