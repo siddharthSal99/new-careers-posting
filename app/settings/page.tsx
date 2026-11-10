@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { encryptionConfigured } from "@/lib/crypto";
+import { encryptionProblem } from "@/lib/crypto";
 import { getSettings } from "@/lib/db";
 import { changePasswordAction, deleteAccountAction, logoutAction, removeAnthropicKeyAction, saveAnthropicKeyAction, saveSettingsAction } from "../actions";
 import { ActionForm } from "../auth-form";
@@ -73,8 +73,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noreferrer">platform.claude.com</a>; a dedicated key with a spend limit is a good idea.
           </span>
         </p>
-        {!encryptionConfigured() ? (
-          <p className="error small">This server can't store API keys yet (ENCRYPTION_KEY isn't set).</p>
+        {encryptionProblem() ? (
+          <p className="error small">This server can't store API keys yet: {encryptionProblem()}</p>
         ) : (
           <ActionForm action={saveAnthropicKeyAction} submit={s.anthropicKeyHint ? "Replace key" : "Save key"} pendingText="Checking key…">
             <label htmlFor="apiKey">{s.anthropicKeyHint ? "New API key" : "API key"}</label>

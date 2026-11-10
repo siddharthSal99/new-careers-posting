@@ -30,7 +30,7 @@ Daily checks call only the boards' public JSON APIs, never the company's own web
    | Variable | Required | Notes |
    |---|---|---|
    | `DATABASE_URL` | yes | Neon pooled connection string |
-   | `ENCRYPTION_KEY` | for AI matching | `openssl rand -base64 32`. Encrypts users' API keys. Don't change it once users have saved keys. |
+   | `ENCRYPTION_KEY` | for AI matching | Any random string of 32+ characters, e.g. `openssl rand -hex 32`. Encrypts users' API keys. Don't change it once users have saved keys. |
    | `CRON_SECRET` | yes | Any long random string; Vercel sends it to the cron route |
    | `SIGNUP_CODE` | no | If set, sign-up requires this invite code |
    | `RESEND_API_KEY` | for email | Without it the digest is only written to the logs |
