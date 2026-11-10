@@ -36,20 +36,32 @@ export function dummyPasswordHash() {
 
 // ---------- Secrets at rest: AES-256-GCM with ENCRYPTION_KEY ----------
 
+/**
+ * The 32-byte key for encrypting secrets, from ENCRYPTION_KEY. Accepts what common generators produce:
+ * - 64 hex characters (32 bytes), e.g. `openssl rand -hex 32`
+ * - base64 of 32 bytes, e.g. `openssl rand -base64 32`
+ * - any other random string of at least 32 characters, hashed with SHA-256
+ * Changing ENCRYPTION_KEY later makes saved keys unreadable (users re-enter them).
+ */
 function encryptionKey(): Buffer {
-  const raw = process.env.ENCRYPTION_KEY;
-  if (!raw) throw new Error("ENCRYPTION_KEY is not set on the server.");
-  const key = Buffer.from(raw, "base64");
-  if (key.length !== 32) throw new Error("ENCRYPTION_KEY must be 32 random bytes, base64-encoded (openssl rand -base64 32).");
-  return key;
+  const raw = (process.env.ENCRYPTION_KEY ?? "").trim();
+  if (!raw) throw new Error("ENCRYPTION_KEY isn't set on the server. Add it in Vercel and redeploy.");
+  if (/^[0-9a-f]{64}$/i.test(raw)) return Buffer.from(raw, "hex");
+  if (/^[A-Za-z0-9+/_-]{42,44}={0,2}$/.test(raw)) {
+    const b = Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+    if (b.length === 32) return b;
+  }
+  if (raw.length >= 32) return createHash("sha256").update(raw).digest();
+  throw new Error(`ENCRYPTION_KEY is too short (${raw.length} characters). Use at least 32 random characters, e.g. from \`openssl rand -hex 32\`.`);
 }
 
-export function encryptionConfigured() {
+/** Null when ENCRYPTION_KEY is usable, otherwise why not. */
+export function encryptionProblem(): string | null {
   try {
     encryptionKey();
-    return true;
-  } catch {
-    return false;
+    return null;
+  } catch (e) {
+    return (e as Error).message;
   }
 }
 
