@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { requireAuth } from "@/lib/auth";
-import { getSettings, listCompanies } from "@/lib/db";
-import { scoringEnabled } from "@/lib/scoring";
+import { requireUser } from "@/lib/auth";
+import { getSettings, listSubscriptions } from "@/lib/db";
 import { searchOpenJobIds } from "@/lib/search";
 import { age, openJobs, type JobView } from "@/lib/views";
 import { ScoreButton } from "./score-button";
@@ -22,23 +21,23 @@ const POSTED: Record<string, { label: string; ms: number }> = {
 const postedDate = (j: JobView) => j.postedAt ?? j.firstSeenAt;
 
 export default async function JobsPage({ searchParams }: { searchParams: Promise<Params> }) {
-  await requireAuth();
+  const user = await requireUser();
   const params = await searchParams;
   const { company, all, posted } = params;
   const q = params.q?.trim() ?? "";
   const sort = params.sort === "fit" ? "fit" : "posted";
   const [jobs, companies, settings, keywordHits] = await Promise.all([
-    openJobs(),
-    listCompanies(),
-    getSettings(),
-    q ? searchOpenJobIds(q) : Promise.resolve(null),
+    openJobs(user.id),
+    listSubscriptions(user.id),
+    getSettings(user.id),
+    q ? searchOpenJobIds(user.id, q) : Promise.resolve(null),
   ]);
   const companyId = company ? Number(company) : null;
   const postedWindow = posted ? POSTED[posted] : undefined;
   const now = Date.now();
 
   const shown = jobs
-    .filter((j) => (companyId ? j.companyId === companyId : true))
+    .filter((j) => (companyId ? j.subscriptionId === companyId : true))
     .filter((j) => (all ? true : j.matches))
     .filter((j) => (postedWindow ? now - postedDate(j).getTime() <= postedWindow.ms : true))
     .filter((j) => (keywordHits ? keywordHits.has(j.id) : true))
@@ -99,7 +98,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         {shown.length} job{shown.length === 1 ? "" : "s"}. Keywords search the title, company, department, location, AI reason and job description. Every term must match as a whole word; use "quotes" for phrases and a trailing * for word beginnings.
         Posting dates come from the company's job board; "new" marks jobs that appeared after you started tracking.
       </p>
-      {shown.length > 0 && <ScoreButton ids={unscored.slice(0, 1000)} enabled={scoringEnabled() && !!settings.resume.trim()} />}
+      {shown.length > 0 && <ScoreButton ids={unscored.slice(0, 1000)} enabled={!!settings.anthropicKeyHint && !!settings.resume.trim()} />}
 
       <div className="panel" style={{ padding: 0, overflowX: "auto" }}>
         <table>

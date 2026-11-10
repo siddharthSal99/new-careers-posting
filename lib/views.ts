@@ -1,10 +1,10 @@
-import { db, getSettings, listCompanies } from "./db";
+import { db, getSettings, listSubscriptions } from "./db";
 import { applyFilters } from "./filters";
 import { resumeHash } from "./score-jobs";
 
 export interface JobView {
   id: number;
-  companyId: number;
+  subscriptionId: number;
   company: string;
   title: string;
   department: string | null;
@@ -12,6 +12,7 @@ export interface JobView {
   url: string;
   postedAt: Date | null;
   firstSeenAt: Date;
+  /** Already open when the user started tracking the company. */
   isBaseline: boolean;
   repost: boolean;
   score: number | null;
@@ -23,36 +24,42 @@ export interface JobView {
   matches: boolean;
 }
 
-/** Open jobs with whether each passes the current filters (re-evaluated, so filter changes show up here). */
-export async function openJobs(): Promise<JobView[]> {
+/** A user's open jobs, with whether each passes their current filters (re-evaluated, so filter changes show up here). */
+export async function openJobs(userId: number): Promise<JobView[]> {
   const sql = await db();
-  const [settings, companies] = await Promise.all([getSettings(), listCompanies()]);
-  const deps = new Map(companies.map((c) => [c.id, c.departments]));
+  const [settings, subs] = await Promise.all([getSettings(userId), listSubscriptions(userId)]);
+  const subByBoard = new Map(subs.map((s) => [s.boardId, s]));
   const rows = await sql`
-    select j.id, j.company_id, c.name as company, j.title, j.department, j.location, j.is_remote, j.url,
-           j.posted_at, j.first_seen_at, j.is_baseline, j.repost_of, j.score, j.verdict, j.reason, j.blockers, j.scored_resume_hash
-    from jobs j join companies c on c.id = j.company_id
+    select j.id, j.company_id, j.title, j.department, j.location, j.is_remote, j.url, j.posted_at, j.first_seen_at,
+           j.repost_of, j.first_seen_at <= s.created_at as is_baseline,
+           uj.score, uj.verdict, uj.reason, uj.blockers, uj.scored_resume_hash
+    from jobs j
+    join subscriptions s on s.company_id = j.company_id and s.user_id = ${userId}
+    left join user_jobs uj on uj.job_id = j.id and uj.user_id = ${userId}
     where j.removed_at is null`;
   const hash = resumeHash(settings.resume);
-  return rows.map((r) => ({
-    id: r.id,
-    companyId: r.company_id,
-    company: r.company,
-    title: r.title,
-    department: r.department,
-    location: r.location,
-    url: r.url,
-    postedAt: r.posted_at,
-    firstSeenAt: r.first_seen_at,
-    isBaseline: r.is_baseline,
-    repost: r.repost_of !== null,
-    score: r.score,
-    verdict: r.verdict,
-    reason: r.reason,
-    blockers: r.blockers,
-    stale: r.score !== null && r.scored_resume_hash !== hash,
-    matches: applyFilters({ title: r.title, department: r.department, location: r.location, isRemote: r.is_remote }, settings, deps.get(r.company_id) ?? []).pass,
-  }));
+  return rows.map((r) => {
+    const s = subByBoard.get(r.company_id)!;
+    return {
+      id: r.id,
+      subscriptionId: s.id,
+      company: s.name,
+      title: r.title,
+      department: r.department,
+      location: r.location,
+      url: r.url,
+      postedAt: r.posted_at,
+      firstSeenAt: r.first_seen_at,
+      isBaseline: r.is_baseline,
+      repost: r.repost_of !== null,
+      score: r.score,
+      verdict: r.verdict,
+      reason: r.reason,
+      blockers: r.blockers,
+      stale: r.score !== null && r.scored_resume_hash !== hash,
+      matches: applyFilters({ title: r.title, department: r.department, location: r.location, isRemote: r.is_remote }, settings, s.departments).pass,
+    };
+  });
 }
 
 export function age(d: Date | null) {

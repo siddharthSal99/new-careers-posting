@@ -1,6 +1,7 @@
 import postgres from "postgres";
+import { decryptSecret } from "./crypto";
 import { SCHEMA } from "./schema";
-import type { Company, Settings } from "./types";
+import type { Settings, Subscription } from "./types";
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -39,45 +40,69 @@ export async function closeDb() {
   globalForDb.schemaReady = undefined;
 }
 
-export async function getSettings(): Promise<Settings> {
+export async function getSettings(userId: number): Promise<Settings> {
   const sql = await db();
-  const [r] = await sql`select * from settings where id = 1`;
+  const [r] = await sql`select * from users where id = ${userId}`;
+  if (!r) throw new Error(`no user ${userId}`);
   return {
-    email: r.email,
+    email: r.digest_email ?? r.email,
     resume: r.resume,
     titleInclude: r.title_include,
     titleExclude: r.title_exclude,
     locations: r.locations,
     remoteOk: r.remote_ok,
+    anthropicKeyHint: r.anthropic_key_enc ? r.anthropic_key_hint : null,
   };
 }
 
-export async function saveSettings(s: Settings) {
+export async function saveSettings(userId: number, s: Omit<Settings, "anthropicKeyHint">) {
   const sql = await db();
   await sql`
-    update settings set
-      email = ${s.email}, resume = ${s.resume},
+    update users set
+      digest_email = ${s.email}, resume = ${s.resume},
       title_include = ${s.titleInclude}, title_exclude = ${s.titleExclude},
       locations = ${s.locations}, remote_ok = ${s.remoteOk}
-    where id = 1`;
+    where id = ${userId}`;
 }
 
-export function toCompany(r: Record<string, any>): Company {
+export const anthropicKeyContext = (userId: number) => `user:${userId}:anthropic`;
+
+/** The user's decrypted Anthropic key, or null if they haven't saved one (or it can't be decrypted). */
+export async function getAnthropicKey(userId: number): Promise<string | null> {
+  const sql = await db();
+  const [r] = await sql`select anthropic_key_enc from users where id = ${userId}`;
+  if (!r?.anthropic_key_enc) return null;
+  try {
+    return decryptSecret(r.anthropic_key_enc, anthropicKeyContext(userId));
+  } catch (e) {
+    console.error(`can't decrypt the Anthropic key for user ${userId} (was ENCRYPTION_KEY changed?):`, (e as Error).message);
+    return null;
+  }
+}
+
+export function toSubscription(r: Record<string, any>): Subscription {
   return {
     id: r.id,
+    boardId: r.company_id,
     name: r.name,
     sourceUrl: r.source_url,
     ats: r.ats,
     boardToken: r.board_token,
     departments: r.departments,
+    createdAt: r.created_at,
     lastSuccessAt: r.last_success_at,
     lastError: r.last_error,
     consecutiveFailures: r.consecutive_failures,
   };
 }
 
-export async function listCompanies(): Promise<Company[]> {
+export async function listSubscriptions(userId: number): Promise<Subscription[]> {
   const sql = await db();
-  const rows = await sql`select * from companies order by lower(name)`;
-  return rows.map(toCompany);
+  const rows = await sql`
+    select s.id, s.company_id, s.name, s.source_url, s.departments, s.created_at,
+           c.ats, c.board_token, c.last_success_at, c.last_error, c.consecutive_failures
+    from subscriptions s join companies c on c.id = s.company_id
+    where s.user_id = ${userId}
+    order by lower(s.name)`;
+  return rows.map(toSubscription);
 }
