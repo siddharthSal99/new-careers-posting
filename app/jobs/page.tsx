@@ -9,12 +9,17 @@ export const dynamic = "force-dynamic";
 // The Score button runs inside this page's server function.
 export const maxDuration = 300;
 
-type Params = { company?: string; all?: string; q?: string; posted?: string; sort?: string };
+type Params = { company?: string; all?: string; q?: string; posted?: string; sort?: string; new?: string };
 
 const POSTED: Record<string, { label: string; ms: number }> = {
   "24h": { label: "Past 24 hours", ms: 86_400_000 },
   "7d": { label: "Past week", ms: 7 * 86_400_000 },
   "30d": { label: "Past month", ms: 30 * 86_400_000 },
+};
+
+const NEW: Record<string, { label: string; ms: number }> = {
+  "24h": { label: "New today", ms: 86_400_000 },
+  "7d": { label: "New this week", ms: 7 * 86_400_000 },
 };
 
 /** Date the company published the job, or when we first saw it if the board doesn't say. */
@@ -34,12 +39,15 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   ]);
   const companyId = company ? Number(company) : null;
   const postedWindow = posted ? POSTED[posted] : undefined;
+  const newWindow = params.new ? NEW[params.new] : undefined;
   const now = Date.now();
 
   const shown = jobs
     .filter((j) => (companyId ? j.subscriptionId === companyId : true))
     .filter((j) => (all ? true : j.matches))
     .filter((j) => (postedWindow ? now - postedDate(j).getTime() <= postedWindow.ms : true))
+    // "New" means it appeared after you started tracking the company, within the window.
+    .filter((j) => (newWindow ? !j.isBaseline && now - j.firstSeenAt.getTime() <= newWindow.ms : true))
     .filter((j) => (keywordHits ? keywordHits.has(j.id) : true))
     .sort((a, b) =>
       sort === "fit"
@@ -82,6 +90,13 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           </select>
         </div>
         <div className="filter-field">
+          <label htmlFor="new">Show</label>
+          <select id="new" name="new" defaultValue={params.new && NEW[params.new] ? params.new : ""}>
+            <option value="">All open jobs</option>
+            {Object.entries(NEW).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </div>
+        <div className="filter-field">
           <label htmlFor="sort">Sort by</label>
           <select id="sort" name="sort" defaultValue={sort}>
             <option value="posted">Most recent</option>
@@ -90,7 +105,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         </div>
         <div className="filter-actions">
           <button type="submit">Apply</button>
-          {(q || posted || params.sort) && <Link href={href({ q: undefined, posted: undefined, sort: undefined })} className="small">Clear</Link>}
+          {(q || posted || params.sort || params.new) && <Link href={href({ q: undefined, posted: undefined, sort: undefined, new: undefined })} className="small">Clear</Link>}
         </div>
       </form>
 

@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import { fetchBoard } from "./ats";
 import { db, getAnthropicKey, getSettings, listSubscriptions } from "./db";
@@ -30,6 +31,8 @@ export interface ScoreOutcome {
   failed: number;
   /** Not attempted because the time budget ran out, or no description was available. */
   notAttempted: number;
+  /** The most recent scoring error, e.g. a revoked key or no credits left. */
+  lastError?: string;
 }
 
 /** Scores jobs for one user with that user's API key until the time budget runs out. */
@@ -75,6 +78,7 @@ export async function scoreTargets(
       out.scored++;
     } catch (e) {
       out.failed++;
+      out.lastError = describeError(e);
       console.error(`scoring failed for user ${userId}, job ${t.jobId}:`, (e as Error).message);
     }
   });
@@ -110,7 +114,8 @@ export async function backfillScores(userId: number, opts: { ids?: number[]; bud
     where j.removed_at is null
       and (uj.score is null or uj.scored_resume_hash is distinct from ${hash})
       ${opts.ids ? sql`and j.id = any(${opts.ids})` : sql``}
-    order by coalesce(j.posted_at, j.first_seen_at) desc`;
+    -- Jobs that are new for this user first, then the most recently posted.
+    order by (j.first_seen_at > s.created_at) desc, coalesce(j.posted_at, j.first_seen_at) desc`;
 
   const targets: ScoreTarget[] = rows
     .filter((r) => {
@@ -140,4 +145,14 @@ export async function backfillScores(userId: number, opts: { ids?: number[]; bud
   if (res.failed) parts.push(`${res.failed} failed (see server logs).`);
   if (remaining > 0) parts.push(`${remaining} still unscored${res.notAttempted ? "; click again to continue" : ""}.`);
   return { ok: true, message: parts.join(" "), scored: res.scored, failed: res.failed, remaining };
+}
+
+/** A short, readable reason for a failed scoring call, e.g. "Anthropic error 400: Your credit balance is too low". */
+function describeError(e: unknown): string {
+  if (e instanceof Anthropic.APIError) {
+    const body = e.error as { error?: { message?: string } } | undefined;
+    const msg = body?.error?.message ?? e.message;
+    return (e.status ? `Anthropic error ${e.status}: ${msg}` : msg).slice(0, 200);
+  }
+  return (e as Error).message.slice(0, 200);
 }

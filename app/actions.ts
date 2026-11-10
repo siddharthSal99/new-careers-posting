@@ -60,6 +60,11 @@ const list = (v: FormDataEntryValue | null) =>
     .map((s) => s.trim())
     .filter(Boolean);
 
+function clampInt(v: FormDataEntryValue | null, min: number, max: number, fallback: number) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback;
+}
+
 export async function saveSettingsAction(formData: FormData) {
   const user = await requireUser();
   await saveSettings(user.id, {
@@ -69,6 +74,8 @@ export async function saveSettingsAction(formData: FormData) {
     titleExclude: list(formData.get("titleExclude")),
     locations: list(formData.get("locations")),
     remoteOk: formData.get("remoteOk") === "on",
+    maxJobs: clampInt(formData.get("maxJobs"), 1, 100, 15),
+    minScore: clampInt(formData.get("minScore"), 0, 10, 7),
   });
   revalidatePath("/", "layout");
   redirect("/settings?saved=1");
