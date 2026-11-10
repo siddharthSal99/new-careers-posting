@@ -64,7 +64,7 @@ npm run daily -- --dry-run   # run the daily check from the command line without
 
 ## Jobs page
 
-- **Filters:** company, keywords, date posted (past 24 hours, week, or month), and "New today" / "New this week" for jobs that appeared after you started tracking the company (the email's links open this view). "Show non-matching too" includes jobs outside your Settings filters.
+- **Filters:** keywords, a company dropdown (with job counts), date posted (past 24 hours, week, or month), and "New today" / "New this week" for jobs that appeared after you started tracking the company (the email's links open this view). "Show non-matching too" includes jobs outside your Settings filters.
 - **Keywords** search the title, company, department, location, AI reason and the full job description. Every term must match as a whole word (`go` doesn't match "good"); use `"quotes"` for phrases and a trailing `*` for word beginnings (`infra*`).
 - **Sort** by most recently posted or by fit score. Unscored jobs sort last.
 - **Fit scores:** new jobs are scored automatically. To score jobs that were already open when you added a company, filter to the jobs you care about and click **Score unscored jobs in this view**; each click scores for about 3 minutes, so click again to continue. The daily run also scores a batch of unscored jobs with its leftover time. If you edit your resume, existing scores are shown faded and get rescored.
