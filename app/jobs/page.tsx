@@ -37,7 +37,9 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     getSettings(user.id),
     q ? searchOpenJobIds(user.id, q) : Promise.resolve(null),
   ]);
-  const companyId = company ? Number(company) : null;
+  // Ignore a company the user no longer tracks (e.g. an old email link) rather than showing nothing.
+  const companyId = company && companies.some((c) => c.id === Number(company)) ? Number(company) : null;
+  const companyOptions = [...companies].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
   const postedWindow = posted ? POSTED[posted] : undefined;
   const newWindow = params.new ? NEW[params.new] : undefined;
   const now = Date.now();
@@ -54,6 +56,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         ? (b.score ?? -1) - (a.score ?? -1) || postedDate(b).getTime() - postedDate(a).getTime()
         : postedDate(b).getTime() - postedDate(a).getTime(),
     );
+  // Job counts per company for the dropdown, respecting "Show non-matching too".
+  const countFor = (subId: number | null) => jobs.filter((j) => (all ? true : j.matches) && (subId === null || j.subscriptionId === subId)).length;
   const unscored = shown.filter((j) => j.score === null || j.stale).map((j) => j.id);
 
   const href = (over: Partial<Params>) => {
@@ -65,22 +69,25 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   return (
     <>
       <h1>Open jobs</h1>
-      <div className="row small" style={{ marginBottom: 12 }}>
-        <Link href={href({ company: undefined })} className={companyId ? "" : "chip"}>All companies</Link>
-        {companies.map((c) => (
-          <Link key={c.id} href={href({ company: String(c.id) })} className={companyId === c.id ? "chip" : ""}>{c.name}</Link>
-        ))}
-        <span style={{ marginLeft: "auto" }}>
-          {all ? <Link href={href({ all: undefined })}>Only matching</Link> : <Link href={href({ all: "1" })}>Show non-matching too</Link>}
-        </span>
+      <div className="row small" style={{ marginBottom: 12, justifyContent: "flex-end" }}>
+        {all ? <Link href={href({ all: undefined })}>Only matching</Link> : <Link href={href({ all: "1" })}>Show non-matching too</Link>}
       </div>
 
-      <form method="get" action="/jobs" className="panel filters">
-        {company && <input type="hidden" name="company" value={company} />}
+      {/* Keyed on the filters so the fields reset when they change via a link (e.g. Clear), not only on a full reload. */}
+      <form key={JSON.stringify(params)} method="get" action="/jobs" className="panel filters">
         {all && <input type="hidden" name="all" value={all} />}
-        <div className="filter-field" style={{ flex: "2 1 240px" }}>
+        <div className="filter-field" style={{ flex: "1 1 100%" }}>
           <label htmlFor="q">Keywords</label>
           <input id="q" name="q" type="text" defaultValue={q} placeholder='e.g. go kafka, "distributed systems", infra*' />
+        </div>
+        <div className="filter-field">
+          <label htmlFor="company">Company</label>
+          <select id="company" name="company" defaultValue={companyId ? String(companyId) : ""}>
+            <option value="">All companies ({countFor(null)})</option>
+            {companyOptions.map((c) => (
+              <option key={c.id} value={c.id}>{c.name} ({countFor(c.id)})</option>
+            ))}
+          </select>
         </div>
         <div className="filter-field">
           <label htmlFor="posted">Date posted</label>
@@ -105,7 +112,9 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         </div>
         <div className="filter-actions">
           <button type="submit">Apply</button>
-          {(q || posted || params.sort || params.new) && <Link href={href({ q: undefined, posted: undefined, sort: undefined, new: undefined })} className="small">Clear</Link>}
+          {(q || posted || params.sort || params.new || company) && (
+            <Link href={href({ q: undefined, posted: undefined, sort: undefined, new: undefined, company: undefined })} className="small">Clear</Link>
+          )}
         </div>
       </form>
 
