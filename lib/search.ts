@@ -17,14 +17,16 @@ export function keywordPatterns(q: string): string[] {
   });
 }
 
-/** IDs of open jobs where every term appears in the title, company, department, location, AI reason or description. */
-export async function searchOpenJobIds(q: string): Promise<Set<number> | null> {
+/** IDs of the user's open jobs where every term appears in the title, company, department, location, AI reason or description. */
+export async function searchOpenJobIds(userId: number, q: string): Promise<Set<number> | null> {
   const patterns = keywordPatterns(q);
   if (!patterns.length) return null;
   const sql = await db();
   const rows = await sql`
-    select j.id from jobs j join companies c on c.id = j.company_id
+    select j.id from jobs j
+    join subscriptions s on s.company_id = j.company_id and s.user_id = ${userId}
+    left join user_jobs uj on uj.job_id = j.id and uj.user_id = ${userId}
     where j.removed_at is null
-      and concat_ws(' ', j.title, c.name, j.department, j.location, j.reason, j.description) ~* all(${patterns}::text[])`;
+      and concat_ws(' ', j.title, s.name, j.department, j.location, uj.reason, j.description) ~* all(${patterns}::text[])`;
   return new Set(rows.map((r) => r.id as number));
 }

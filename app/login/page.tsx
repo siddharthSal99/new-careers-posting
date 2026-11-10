@@ -1,23 +1,23 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { logIn } from "@/lib/auth";
+import { currentUser } from "@/lib/auth";
+import { loginAction } from "../actions";
+import { ActionForm } from "../auth-form";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
-  async function login(formData: FormData) {
-    "use server";
-    if (await logIn(String(formData.get("password") ?? ""))) redirect("/");
-    redirect("/login?error=1");
-  }
+export const dynamic = "force-dynamic";
+
+export default async function LoginPage() {
+  if (await currentUser()) redirect("/");
   return (
-    <div className="panel" style={{ maxWidth: 360, margin: "40px auto" }}>
+    <div className="panel" style={{ maxWidth: 380, margin: "40px auto" }}>
       <h1>Log in</h1>
-      {!process.env.APP_PASSWORD && <p className="error">APP_PASSWORD is not set on the server.</p>}
-      <form action={login}>
+      <ActionForm action={loginAction} submit="Log in" pendingText="Logging in…">
+        <label htmlFor="email">Email</label>
+        <input id="email" name="email" type="email" autoComplete="email" autoFocus required />
         <label htmlFor="password">Password</label>
-        <input id="password" name="password" type="password" autoFocus required />
-        {error && <p className="error small">Wrong password.</p>}
-        <p><button type="submit">Log in</button></p>
-      </form>
+        <input id="password" name="password" type="password" autoComplete="current-password" required />
+      </ActionForm>
+      <p className="small muted">No account? <Link href="/signup">Sign up</Link></p>
     </div>
   );
 }

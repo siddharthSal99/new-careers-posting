@@ -16,7 +16,7 @@ export function ScoreButton({ ids, enabled }: { ids: number[]; enabled: boolean 
             ? "Every job in this view is scored"
             : `Score ${ids.length} unscored job${ids.length === 1 ? "" : "s"} in this view`}
       </button>
-      {!enabled && <span className="muted small">AI matching needs ANTHROPIC_API_KEY and a resume in Settings.</span>}
+      {!enabled && <span className="muted small">AI matching needs your Anthropic API key and resume in Settings.</span>}
       {result && <span className={`small ${result.ok ? "" : "error"}`}>{result.message}</span>}
     </form>
   );
