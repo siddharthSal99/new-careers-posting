@@ -78,6 +78,10 @@ create table if not exists users (
   anthropic_key_hint text
 );
 
+-- added later: digest size limits
+alter table users add column if not exists digest_max_jobs int not null default 15;
+alter table users add column if not exists min_score int not null default 7;
+
 create table if not exists sessions (
   -- sha256 of the cookie token, so a database leak doesn't expose live sessions
   token_hash text primary key,

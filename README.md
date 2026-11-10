@@ -6,6 +6,7 @@ Multiple people can use one deployment. Each user has their own account, compani
 
 - Paste a careers page URL (e.g. `https://openai.com/careers/search/`). The app finds the company's Greenhouse or Ashby job board behind it and saves every current job as already seen.
 - Once a day it fetches each board, compares it with what's saved, and emails you the jobs that are new **and** match your filters. If nothing is new, no email is sent.
+- The email stays short however many companies you track: it lists your best matches (15 by default) and counts the rest per company, with links to them in the app. With AI matching on, only jobs scoring at or above your minimum (7/10 by default) are listed, and if none qualify no email is sent. Both limits are in Settings.
 - Filters: departments (per company), title keywords, and locations (with an option for remote).
 - Optional AI matching: each user can save their own Anthropic API key in Settings. New matching jobs are then scored 0-10 against their resume by Claude Haiku, with a one-line reason and any hard blockers (clearance, visa, years of experience). Poor fits go in a collapsed section of the email rather than being dropped.
 - Also tracks removed jobs, flags likely reposts (same title and location as an earlier job), and warns you in the email if a board keeps failing to load.
@@ -63,7 +64,7 @@ npm run daily -- --dry-run   # run the daily check from the command line without
 
 ## Jobs page
 
-- **Filters:** company, keywords, and date posted (past 24 hours, week, or month). "Show non-matching too" includes jobs outside your Settings filters.
+- **Filters:** company, keywords, date posted (past 24 hours, week, or month), and "New today" / "New this week" for jobs that appeared after you started tracking the company (the email's links open this view). "Show non-matching too" includes jobs outside your Settings filters.
 - **Keywords** search the title, company, department, location, AI reason and the full job description. Every term must match as a whole word (`go` doesn't match "good"); use `"quotes"` for phrases and a trailing `*` for word beginnings (`infra*`).
 - **Sort** by most recently posted or by fit score. Unscored jobs sort last.
 - **Fit scores:** new jobs are scored automatically. To score jobs that were already open when you added a company, filter to the jobs you care about and click **Score unscored jobs in this view**; each click scores for about 3 minutes, so click again to continue. The daily run also scores a batch of unscored jobs with its leftover time. If you edit your resume, existing scores are shown faded and get rescored.
@@ -77,7 +78,13 @@ For each company:
 3. Jobs with an ID we haven't seen are **new**. New jobs are checked against your filters; ones that fail are recorded but never emailed. A new job with the same title and location as an earlier one is flagged as a likely repost.
 4. Jobs that disappeared are marked removed. If one comes back, it's reopened without counting as new.
 
-Then, for each user, jobs that appeared after they started tracking the company and pass their filters are scored with their API key and sent in one email. Any time left over is used to score older open jobs. Jobs are marked as emailed only after the email is sent, so a failed send is retried the next day.
+Then, for each user:
+
+1. Jobs that appeared after they started tracking the company and pass their filters are scored with their API key. New jobs always get scoring time before any older backlog.
+2. A new job that couldn't be scored in time (or because scoring failed) is held for the next run, so the email stays ranked. After 2 days it's sent anyway, marked "not scored", with a note if scoring is failing (e.g. a revoked key or no credits).
+3. The email lists the best jobs at or above the user's minimum score, up to their per-email limit, and counts the rest per company with links to the app. Jobs left out of the email are still on the Jobs page.
+
+Any time left over is used to score older open jobs. Jobs are marked as emailed only after the email is sent, so a failed send is retried the next day.
 
 Changing filters affects future new jobs and the Jobs page; it never re-announces jobs you've already seen.
 

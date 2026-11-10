@@ -51,6 +51,8 @@ export async function getSettings(userId: number): Promise<Settings> {
     titleExclude: r.title_exclude,
     locations: r.locations,
     remoteOk: r.remote_ok,
+    maxJobs: r.digest_max_jobs,
+    minScore: r.min_score,
     anthropicKeyHint: r.anthropic_key_enc ? r.anthropic_key_hint : null,
   };
 }
@@ -61,7 +63,8 @@ export async function saveSettings(userId: number, s: Omit<Settings, "anthropicK
     update users set
       digest_email = ${s.email}, resume = ${s.resume},
       title_include = ${s.titleInclude}, title_exclude = ${s.titleExclude},
-      locations = ${s.locations}, remote_ok = ${s.remoteOk}
+      locations = ${s.locations}, remote_ok = ${s.remoteOk},
+      digest_max_jobs = ${s.maxJobs}, min_score = ${s.minScore}
     where id = ${userId}`;
 }
 

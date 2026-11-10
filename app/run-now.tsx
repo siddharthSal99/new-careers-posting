@@ -19,7 +19,11 @@ export function RunNow() {
           ))}
           {me && (
             <>
-              <div>{me.newMatching} new job{me.newMatching === 1 ? "" : "s"} matching your filters.</div>
+              <div>
+                {me.newMatching} new job{me.newMatching === 1 ? "" : "s"} matching your filters
+                {me.newMatching > 0 && `, ${me.shown} listed in the email`}
+                {me.carried > 0 && `, ${me.carried} waiting to be scored`}.
+              </div>
               {(me.scored > 0 || me.scoreErrors > 0) && <div>Scored {me.scored} with AI{me.scoreErrors ? `, ${me.scoreErrors} failed` : ""}.</div>}
               {!!me.backfilled && <div>Also scored {me.backfilled} older job{me.backfilled === 1 ? "" : "s"}.</div>}
               <div>Email: {me.email}</div>

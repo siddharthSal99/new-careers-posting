@@ -34,6 +34,10 @@ export interface Settings {
   titleExclude: string[];
   locations: string[];
   remoteOk: boolean;
+  /** Most jobs listed in one digest email. */
+  maxJobs: number;
+  /** With AI matching on, only jobs scoring at least this are listed in the email. */
+  minScore: number;
   /** e.g. "sk-ant-…a1b2" when the user has saved a key. */
   anthropicKeyHint: string | null;
 }

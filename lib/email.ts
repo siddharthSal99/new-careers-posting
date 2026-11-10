@@ -7,10 +7,10 @@ export interface DigestJob {
   department: string | null;
   url: string;
   postedAt: Date | null;
-  firstSeenAt: Date;
   repost: boolean;
   score: number | null;
-  verdict: string | null;
+  /** AI matching is on but this job couldn't be scored. */
+  unscored?: boolean;
   reason: string | null;
   blockers: string[] | null;
 }
@@ -21,11 +21,36 @@ export interface BrokenSource {
   failures: number;
 }
 
+export interface MoreLine {
+  company: string;
+  count: number;
+  /** Link to this company's new jobs in the app, when APP_URL is set. */
+  href: string | null;
+}
+
+export interface Digest {
+  /** The jobs listed in full, best first. */
+  shown: DigestJob[];
+  /** New matching jobs not listed, per company. */
+  more: MoreLine[];
+  /** New jobs that passed the filters this time (listed or not). */
+  totalNew: number;
+  /** How many of those scored below the threshold; null when AI matching is off. */
+  belowThreshold: number | null;
+  threshold: number | null;
+  broken: BrokenSource[];
+  /** Shown when AI scoring is on but some listed jobs couldn't be scored. */
+  scoringProblem: string | null;
+  /** Link to all new jobs in the app, when APP_URL is set. */
+  allHref: string | null;
+}
+
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 function jobRow(j: DigestJob) {
   const badges = [
-    j.score !== null ? `<b>${j.score}/10</b>` : "",
+    j.score !== null ? `<b>${j.score}/10</b>` : j.unscored ? `<span style="color:#666">not scored</span>` : "",
     j.repost ? `<span style="color:#b45309">likely repost</span>` : "",
   ]
     .filter(Boolean)
@@ -40,35 +65,55 @@ function jobRow(j: DigestJob) {
   </td></tr>`;
 }
 
-export function renderDigest(jobs: DigestJob[], broken: BrokenSource[], appUrl?: string) {
-  const scored = jobs.some((j) => j.score !== null);
-  const strong = scored ? jobs.filter((j) => j.verdict !== "skip") : jobs;
-  const skipped = scored ? jobs.filter((j) => j.verdict === "skip") : [];
-  strong.sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.company.localeCompare(b.company));
-
+export function renderDigest(d: Digest) {
+  const { shown, more, broken } = d;
+  const hidden = more.reduce((n, m) => n + m.count, 0);
   const parts: string[] = [];
   parts.push(`<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:640px">`);
-  if (strong.length) {
-    parts.push(`<h2 style="font-size:18px">${strong.length} new job${strong.length === 1 ? "" : "s"} for you</h2>`);
-    parts.push(`<table style="width:100%;border-collapse:collapse">${strong.map(jobRow).join("")}</table>`);
+
+  if (shown.length) {
+    // Only claim the threshold when every listed job was actually scored.
+    const heading =
+      d.threshold !== null && shown.every((j) => j.score !== null)
+        ? `${plural(shown.length, "new job")} scoring ${d.threshold}/10 or higher`
+        : `${plural(shown.length, "new job")} for you`;
+    parts.push(`<h2 style="font-size:18px;margin-bottom:4px">${heading}</h2>`);
+    if (hidden > 0) {
+      const note = [`${d.totalNew} new jobs matched your filters`];
+      if (d.belowThreshold) note.push(`${d.belowThreshold} scored below ${d.threshold}/10`);
+      parts.push(`<p style="color:#666;font-size:13px;margin-top:0">${esc(note.join("; "))}. These are the top ${shown.length}.</p>`);
+    }
+    parts.push(`<table style="width:100%;border-collapse:collapse">${shown.map(jobRow).join("")}</table>`);
   }
-  if (skipped.length) {
-    parts.push(`<details style="margin-top:16px"><summary style="color:#666">${skipped.length} more the AI rated a poor fit</summary>
-      <table style="width:100%;border-collapse:collapse">${skipped.map(jobRow).join("")}</table></details>`);
+
+  if (d.scoringProblem) {
+    parts.push(`<p style="color:#b45309;font-size:13px">${esc(d.scoringProblem)}</p>`);
   }
+
+  if (more.length) {
+    parts.push(`<h3 style="font-size:15px;margin-top:24px">More new jobs in the app</h3><ul style="padding-left:18px">`);
+    for (const m of more) {
+      const label = `${esc(m.company)}: ${plural(m.count, "more job")}`;
+      parts.push(`<li>${m.href ? `<a href="${esc(m.href)}" style="color:#1d4ed8">${label}</a>` : label}</li>`);
+    }
+    parts.push(`</ul>`);
+    if (d.allHref) parts.push(`<p><a href="${esc(d.allHref)}" style="color:#1d4ed8">See all new jobs, sorted by fit</a></p>`);
+  }
+
   if (broken.length) {
     parts.push(`<h3 style="font-size:15px;color:#b91c1c;margin-top:24px">Sources that are failing</h3><ul>${broken
       .map((b) => `<li>${esc(b.company)}: ${esc(b.error)} (${b.failures} runs in a row)</li>`)
       .join("")}</ul>`);
   }
-  if (appUrl) parts.push(`<p style="color:#888;font-size:12px;margin-top:24px"><a href="${esc(appUrl)}">Open job tracker</a></p>`);
   parts.push(`</div>`);
 
-  const subject = strong.length
-    ? `${strong.length} new job${strong.length === 1 ? "" : "s"}: ${[...new Set(strong.map((j) => j.company))].slice(0, 3).join(", ")}`
-    : skipped.length
-      ? `${skipped.length} new job${skipped.length === 1 ? "" : "s"} (none rated a strong fit)`
-      : `Job tracker: ${broken.length} source${broken.length === 1 ? "" : "s"} failing`;
+  const companies = [...new Set(shown.map((j) => j.company))];
+  const names = companies.slice(0, 3).join(", ") + (companies.length > 3 ? ` +${companies.length - 3}` : "");
+  const subject = shown.length
+    ? hidden > 0
+      ? `Top ${shown.length} of ${d.totalNew} new jobs: ${names}`
+      : `${plural(shown.length, "new job")}: ${names}`
+    : `Job tracker: ${plural(broken.length, "source")} failing`;
   return { subject, html: parts.join("\n") };
 }
 

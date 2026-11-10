@@ -21,6 +21,27 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <label htmlFor="email" style={{ marginTop: 0 }}>Send the daily digest to</label>
         <input id="email" name="email" type="email" defaultValue={s.email ?? ""} />
 
+        <div className="row" style={{ gap: 16, alignItems: "flex-start" }}>
+          <div style={{ flex: "1 1 200px" }}>
+            <label htmlFor="maxJobs">Jobs listed per email</label>
+            <input id="maxJobs" name="maxJobs" type="number" min={1} max={100} defaultValue={s.maxJobs} />
+            <p className="muted small">The best matches are listed; the rest are counted per company with a link to the app.</p>
+          </div>
+          <div style={{ flex: "1 1 200px" }}>
+            <label htmlFor="minScore">Minimum fit score to email</label>
+            <select id="minScore" name="minScore" defaultValue={String(s.minScore)}>
+              {Array.from({ length: 11 }, (_, i) => (
+                <option key={i} value={i}>{i === 0 ? "0 (list everything)" : `${i}/10`}</option>
+              ))}
+            </select>
+            <p className="muted small">
+              {s.anthropicKeyHint
+                ? "Lower-scored new jobs stay on the Jobs page. No email is sent if none qualify."
+                : "Applies once AI matching is on (add an API key below). Until then, jobs are listed newest first."}
+            </p>
+          </div>
+        </div>
+
         <label htmlFor="titleInclude">Title must contain one of</label>
         <input id="titleInclude" name="titleInclude" type="text" defaultValue={s.titleInclude.join(", ")} />
         <p className="muted small">Comma-separated, whole words. Leave empty to allow any title.</p>
