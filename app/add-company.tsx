@@ -19,7 +19,8 @@ export function AddCompany() {
     return (
       <div className="panel">
         <p>
-          <b>{state.atsLabel}</b> board <code>{state.token}</code> ({state.how}): <b>{state.total}</b> open jobs.
+          <b>{state.atsLabel}</b> board <code>{state.token}</code> ({state.how}): <b>{state.total}</b> open jobs posted in the last 3 months
+          {state.tooOld > 0 && <span className="muted"> ({state.tooOld} older ones won't be tracked)</span>}.
         </p>
         {state.notes.map((n) => <p key={n} className="muted small">{n}</p>)}
         <form action={saveCompanyAction}>

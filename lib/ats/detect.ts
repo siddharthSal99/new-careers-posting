@@ -103,7 +103,7 @@ async function boardExists(ref: BoardRef): Promise<boolean> {
 }
 
 export async function previewBoard(ref: BoardRef) {
-  const { jobs, companyName } = await fetchBoard(ref.ats, ref.token);
+  const { jobs, tooOld, companyName } = await fetchBoard(ref.ats, ref.token);
   const departments = new Map<string, number>();
   for (const j of jobs) {
     const d = j.department ?? "(none)";
@@ -111,6 +111,7 @@ export async function previewBoard(ref: BoardRef) {
   }
   return {
     jobs,
+    tooOld,
     companyName: companyName ?? ref.token.charAt(0).toUpperCase() + ref.token.slice(1),
     departments: [...departments.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
   };
