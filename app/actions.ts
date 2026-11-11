@@ -118,6 +118,8 @@ export type PreviewState =
       how: string;
       name: string;
       total: number;
+      /** Open jobs skipped because they were posted more than 3 months ago. */
+      tooOld: number;
       departments: { name: string; count: number }[];
       notes: string[];
     };
@@ -139,6 +141,7 @@ export async function previewAction(_prev: PreviewState, formData: FormData): Pr
       how: { url: "from the URL", page: "linked from the careers page", guess: "guessed from the domain — check the name and count" }[detection.how],
       name: String(formData.get("name") ?? "").trim() || p.companyName,
       total: p.jobs.length,
+      tooOld: p.tooOld,
       departments: p.departments,
       notes,
     };

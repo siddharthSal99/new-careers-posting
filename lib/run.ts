@@ -5,6 +5,7 @@ import { renderDigest, sendDigest, type BrokenSource } from "./email";
 import { applyFilters } from "./filters";
 import { backfillScores, resumeHash, scoreTargets, type ScoreTarget } from "./score-jobs";
 import { mapLimit } from "./scoring";
+import { purgeOldData } from "./retention";
 
 export interface BoardResult {
   name: string;
@@ -32,6 +33,8 @@ export interface UserResult {
 }
 
 export interface RunSummary {
+  /** Rows deleted for being past the retention window. */
+  purged?: { jobs: number; runs: number; sessions: number };
   boards: BoardResult[];
   users: UserResult[];
 }
@@ -54,6 +57,13 @@ export async function runDaily(opts: { dryRun?: boolean; userId?: number } = {})
   const [run] = await sql`insert into runs default values returning id`;
   const summary: RunSummary = { boards: [], users: [] };
 
+  // 0. Drop jobs past the retention window first, so they aren't counted or scored below.
+  try {
+    summary.purged = await purgeOldData();
+  } catch (e) {
+    console.error("purge failed:", (e as Error).message);
+  }
+
   // 1. Fetch each board once and diff it against what's stored.
   const boards = await sql`
     select c.id, c.ats, c.board_token, min(s.name) as name from companies c
@@ -62,11 +72,12 @@ export async function runDaily(opts: { dryRun?: boolean; userId?: number } = {})
     group by c.id`;
   await mapLimit(boards, 4, async (b) => {
     try {
-      const { jobs } = await fetchBoard(b.ats, b.board_token);
+      const { jobs, tooOld } = await fetchBoard(b.ats, b.board_token);
       const [{ active }] = await sql`select count(*)::int as active from jobs where company_id = ${b.id} and removed_at is null`;
       // An empty board when there were open jobs is more likely an outage or a moved board than
       // every job closing at once, so don't record removals or treat it as a success.
-      if (jobs.length === 0 && active > 0) throw new Error(`board returned 0 jobs (had ${active})`);
+      // (Jobs skipped only for being too old don't count as an empty board.)
+      if (jobs.length === 0 && tooOld === 0 && active > 0) throw new Error(`board returned 0 jobs (had ${active})`);
       const r = await syncBoard(b.id, jobs);
       await sql`update companies set last_success_at = now(), last_error = null, consecutive_failures = 0 where id = ${b.id}`;
       summary.boards.push({ name: b.name, ok: true, total: r.total, added: r.added, removed: r.removed });

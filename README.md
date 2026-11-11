@@ -10,6 +10,7 @@ Multiple people can use one deployment. Each user has their own account, compani
 - Filters: departments (per company), title keywords, and locations (with an option for remote).
 - Optional AI matching: each user can save their own Anthropic API key in Settings. New matching jobs are then scored 0-10 against their resume by Claude Haiku, with a one-line reason and any hard blockers (clearance, visa, years of experience). Poor fits go in a collapsed section of the email rather than being dropped.
 - Also tracks removed jobs, flags likely reposts (same title and location as an earlier job), and warns you in the email if a board keeps failing to load.
+- Only jobs posted in the last 3 months are kept (see [Data retention](#data-retention)).
 
 Supported job boards: **Greenhouse** and **Ashby**.
 
@@ -69,6 +70,16 @@ npm run daily -- --dry-run   # run the daily check from the command line without
 - **Sort** by most recently posted or by fit score. Unscored jobs sort last.
 - **Fit scores:** new jobs are scored automatically. To score jobs that were already open when you added a company, filter to the jobs you care about and click **Score unscored jobs in this view**; each click scores for about 3 minutes, so click again to continue. The daily run also scores a batch of unscored jobs with its leftover time. If you edit your resume, existing scores are shown faded and get rescored.
 
+## Data retention
+
+To keep the database small, and because older postings are more likely to be stale:
+
+- Jobs posted more than 90 days ago (by the date on the company's job board) are never stored, even if they're still open. Adding a company shows how many open jobs that skips.
+- Each daily run first deletes stored jobs that have passed 90 days since posting, together with every user's scores for them, plus closed jobs removed more than 90 days ago, run logs older than 90 days, and expired login sessions.
+- A job with no posting date is kept while it's open, since deleting it would make it look new the next time the board is fetched. It's deleted 90 days after it closes.
+
+The window is `RETENTION_DAYS` in `lib/retention.ts`.
+
 ## How the daily check works
 
 For each company:
@@ -95,6 +106,7 @@ Changing filters affects future new jobs and the Jobs page; it never re-announce
 - `lib/filters.ts`: department, title and location filters
 - `lib/scoring.ts`: resume matching with Claude Haiku (structured JSON output); `lib/score-jobs.ts`: time-limited batch scoring
 - `lib/search.ts`: whole-word keyword search over open jobs
+- `lib/retention.ts`: the 90-day retention window and daily purge
 - `lib/run.ts`: the daily pipeline; `lib/email.ts`: the digest email
 - `lib/auth.ts`: accounts and sessions; `lib/crypto.ts`: password hashing and API-key encryption
 - `lib/schema.ts`: database schema
