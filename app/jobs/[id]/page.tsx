@@ -8,8 +8,9 @@ import { age } from "@/lib/views";
 export const dynamic = "force-dynamic";
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
-  const id = Number((await params).id);
+  const rawId = (await params).id;
+  const user = await requireUser(`/jobs/${encodeURIComponent(rawId)}`);
+  const id = Number(rawId);
   if (!Number.isInteger(id) || id <= 0) notFound();
   const job = await getJobPage(user.id, id);
   if (!job) notFound();

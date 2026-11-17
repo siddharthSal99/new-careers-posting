@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { detectBoard, previewBoard } from "@/lib/ats/detect";
 import { ATS_LABEL } from "@/lib/ats";
-import { changePassword, deleteAccount, logIn, logOut, requireUser, signUp } from "@/lib/auth";
+import { changePassword, deleteAccount, logIn, logOut, requireUser, safeNext, signUp } from "@/lib/auth";
 import { subscribe, unsubscribe } from "@/lib/companies";
 import { encryptSecret } from "@/lib/crypto";
 import { anthropicKeyContext, db, saveSettings } from "@/lib/db";
@@ -20,7 +20,7 @@ export type FormState = { error?: string; ok?: string } | null;
 export async function loginAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const res = await logIn(String(formData.get("email") ?? ""), String(formData.get("password") ?? ""));
   if (res) return res;
-  redirect("/");
+  redirect(safeNext(String(formData.get("next") ?? "")));
 }
 
 export async function signupAction(_prev: FormState, formData: FormData): Promise<FormState> {

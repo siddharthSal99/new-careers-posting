@@ -35,11 +35,19 @@ export async function currentUser(): Promise<User | null> {
   return u ? { id: u.id, email: u.email } : null;
 }
 
-/** Call at the top of every page and server action that needs a signed-in user. */
-export async function requireUser(): Promise<User> {
+/**
+ * Call at the top of every page and server action that needs a signed-in user.
+ * `returnTo` (a path in this app) is where to come back to after logging in, e.g. a job page opened from an email.
+ */
+export async function requireUser(returnTo?: string): Promise<User> {
   const u = await currentUser();
-  if (!u) redirect("/login");
+  if (!u) redirect(returnTo ? `/login?next=${encodeURIComponent(returnTo)}` : "/login");
   return u;
+}
+
+/** A post-login destination, only if it's a path inside this app (never another site). */
+export function safeNext(next: string | null | undefined): string {
+  return next && /^\/(?!\/)[^\s\\]*$/.test(next) ? next : "/";
 }
 
 async function startSession(userId: number) {
