@@ -57,7 +57,9 @@ export async function syncBoard(boardId: number, fetched: FetchedJob[]): Promise
   const sql = await db();
   return sql.begin(async (tx) => {
     const existing = await tx`
-      select id, external_id, title, location, removed_at, description is null as no_description, salary, apply_url
+      select id, external_id, title, location, removed_at, salary, apply_url,
+             -- missing, or saved by an older version that left HTML entities like &rsquo; in the text
+             (description is null or description ~ '&[A-Za-z]+;') as refresh_description
       from jobs where company_id = ${boardId}`;
     const byExt = new Map(existing.map((r) => [r.external_id as string, r]));
     const byKey = new Map<string, number>();
@@ -75,9 +77,9 @@ export async function syncBoard(boardId: number, fetched: FetchedJob[]): Promise
     // Descriptions are only needed while a job is open.
     if (gone.length) await tx`update jobs set removed_at = now(), description = null where id = any(${gone})`;
 
-    // Fill in descriptions for open jobs that don't have one (saved before descriptions were stored, or reopened).
+    // Fill in descriptions for open jobs that don't have a usable one (missing, reopened, or saved with raw HTML entities).
     const fill = existing
-      .filter((r) => r.no_description && seen.get(r.external_id)?.description)
+      .filter((r) => r.refresh_description && seen.get(r.external_id)?.description)
       .map((r) => ({ id: r.id as number, d: seen.get(r.external_id)!.description }));
     for (let i = 0; i < fill.length; i += 200) {
       const chunk = fill.slice(i, i + 200);
