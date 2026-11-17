@@ -44,6 +44,12 @@ create table if not exists jobs (
   unique (company_id, external_id)
 );
 alter table jobs add column if not exists scored_resume_hash text;
+-- added later: job page details
+alter table jobs add column if not exists salary text;
+alter table jobs add column if not exists apply_url text;
+-- application questions etc., fetched when someone first opens the job page (see lib/job-details.ts)
+alter table jobs add column if not exists details jsonb;
+alter table jobs add column if not exists details_fetched_at timestamptz;
 create index if not exists jobs_company_idx on jobs (company_id);
 
 -- legacy (single-user version): copied into the first account, then unused

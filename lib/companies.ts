@@ -57,7 +57,7 @@ export async function syncBoard(boardId: number, fetched: FetchedJob[]): Promise
   const sql = await db();
   return sql.begin(async (tx) => {
     const existing = await tx`
-      select id, external_id, title, location, removed_at, description is null as no_description
+      select id, external_id, title, location, removed_at, description is null as no_description, salary, apply_url
       from jobs where company_id = ${boardId}`;
     const byExt = new Map(existing.map((r) => [r.external_id as string, r]));
     const byKey = new Map<string, number>();
@@ -87,6 +87,22 @@ export async function syncBoard(boardId: number, fetched: FetchedJob[]): Promise
         where jobs.id = v.id`;
     }
 
+    // Fill in pay ranges and apply links for jobs saved before they were recorded.
+    const extras = existing
+      .filter((r) => {
+        const f = seen.get(r.external_id);
+        return f && ((!r.salary && f.salary) || (!r.apply_url && f.applyUrl));
+      })
+      .map((r) => ({ id: r.id as number, s: seen.get(r.external_id)!.salary ?? null, a: seen.get(r.external_id)!.applyUrl ?? null }));
+    for (let i = 0; i < extras.length; i += 500) {
+      const chunk = extras.slice(i, i + 500);
+      await tx`
+        update jobs set salary = coalesce(jobs.salary, v.s), apply_url = coalesce(jobs.apply_url, v.a)
+        from (select unnest(${chunk.map((f) => f.id)}::int[]) as id, unnest(${chunk.map((f) => f.s)}::text[]) as s,
+                     unnest(${chunk.map((f) => f.a)}::text[]) as a) v
+        where jobs.id = v.id`;
+    }
+
     const rows = fresh.map((j) => ({
       company_id: boardId,
       external_id: j.externalId,
@@ -98,6 +114,8 @@ export async function syncBoard(boardId: number, fetched: FetchedJob[]): Promise
       posted_at: j.postedAt,
       repost_of: byKey.get(repostKey(j.title, j.location)) ?? null,
       description: j.description || null,
+      salary: j.salary ?? null,
+      apply_url: j.applyUrl ?? null,
     }));
     for (let i = 0; i < rows.length; i += 500) {
       await tx`insert into jobs ${tx(rows.slice(i, i + 500))} on conflict (company_id, external_id) do nothing`;

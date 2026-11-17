@@ -34,6 +34,8 @@ export async function fetchGreenhouse(token: string): Promise<{ jobs: FetchedJob
       postedAt: j.first_published ? new Date(j.first_published) : null,
       // Greenhouse returns the content HTML-escaped.
       description: j.content ? htmlToText(decodeEntities(j.content)) : "",
+      // The application form is on the job page itself; pay ranges come from the per-job API (lib/ats/details.ts).
+      applyUrl: `${j.absolute_url}#app`,
     };
   });
   return { jobs, companyName: data.jobs[0]?.company_name };

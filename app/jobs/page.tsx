@@ -137,7 +137,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
             {shown.slice(0, 500).map((j) => (
               <tr key={j.id} style={j.matches ? undefined : { opacity: 0.55 }}>
                 <td style={{ paddingLeft: 16 }}>
-                  <a href={j.url} target="_blank" rel="noreferrer">{j.title}</a>{" "}
+                  <Link href={`/jobs/${j.id}`}>{j.title}</Link>{" "}
                   {!j.isBaseline && <span className="chip good">new</span>}{" "}
                   {j.repost && <span className="chip warn">likely repost</span>}
                   <div className="muted small">{[j.company, j.department, j.location].filter(Boolean).join(" · ")}</div>
