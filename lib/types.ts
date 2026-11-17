@@ -13,6 +13,10 @@ export interface FetchedJob {
   postedAt: Date | null;
   /** Plain-text description. */
   description: string;
+  /** Pay range as posted, e.g. "$207K – $285K • Offers Equity", when the list API includes it. */
+  salary?: string | null;
+  /** Where to apply, when different from `url`. */
+  applyUrl?: string | null;
 }
 
 export interface BoardRef {

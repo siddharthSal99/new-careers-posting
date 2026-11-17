@@ -14,11 +14,13 @@ interface AshbyJob {
   publishedAt?: string | null;
   jobUrl: string;
   descriptionPlain?: string | null;
+  applyUrl?: string | null;
+  compensation?: { compensationTierSummary?: string | null; scrapeableCompensationSalarySummary?: string | null } | null;
 }
 
 export async function fetchAshby(token: string): Promise<{ jobs: FetchedJob[] }> {
   const data = await fetchJson<{ jobs: AshbyJob[] }>(
-    `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(token)}`,
+    `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(token)}?includeCompensation=true`,
     60_000,
   );
   const jobs = data.jobs
@@ -37,6 +39,8 @@ export async function fetchAshby(token: string): Promise<{ jobs: FetchedJob[] }>
         url: j.jobUrl,
         postedAt: j.publishedAt ? new Date(j.publishedAt) : null,
         description: j.descriptionPlain ?? "",
+        salary: j.compensation?.compensationTierSummary || j.compensation?.scrapeableCompensationSalarySummary || null,
+        applyUrl: j.applyUrl ?? null,
       };
     });
   return { jobs };

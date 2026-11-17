@@ -44,6 +44,12 @@ create table if not exists jobs (
   unique (company_id, external_id)
 );
 alter table jobs add column if not exists scored_resume_hash text;
+-- added later: job page details
+alter table jobs add column if not exists salary text;
+alter table jobs add column if not exists apply_url text;
+-- application questions etc., fetched when someone first opens the job page (see lib/job-details.ts)
+alter table jobs add column if not exists details jsonb;
+alter table jobs add column if not exists details_fetched_at timestamptz;
 create index if not exists jobs_company_idx on jobs (company_id);
 
 -- legacy (single-user version): copied into the first account, then unused
@@ -118,6 +124,25 @@ create table if not exists user_jobs (
   scored_resume_hash text,
   primary key (user_id, job_id)
 );
+
+-- A user's saved answer to an application question. Keeps its own copy of the question, company and job title,
+-- so it stays useful (e.g. as a reference for new drafts) after the job itself is deleted.
+create table if not exists essays (
+  id serial primary key,
+  user_id int not null references users(id) on delete cascade,
+  job_id int references jobs(id) on delete set null,
+  -- the question's id on the application form (see lib/ats/details.ts)
+  question_key text,
+  question text not null,
+  question_description text not null default '',
+  company text not null default '',
+  job_title text not null default '',
+  answer text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index if not exists essays_job_question_idx on essays (user_id, job_id, question_key) where job_id is not null;
+create index if not exists essays_user_idx on essays (user_id, updated_at desc);
 
 create table if not exists runs (
   id serial primary key,

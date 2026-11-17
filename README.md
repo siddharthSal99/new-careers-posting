@@ -52,7 +52,8 @@ The daily check is scheduled in `vercel.json` (`0 14 * * *`, i.e. 14:00 UTC). On
 - Sessions are random 256-bit tokens in an HttpOnly cookie; only their SHA-256 hash is stored. Sessions last 30 days, and changing your password signs out other devices.
 - After 10 wrong passwords an account is locked for 15 minutes. Login responses don't reveal whether an email has an account.
 - Anthropic API keys are checked with Anthropic when saved, then encrypted with AES-256-GCM using `ENCRYPTION_KEY`. The user's ID is bound into the encryption, so a key copied onto another user's row won't decrypt. Keys are never sent back to the browser (Settings shows only `sk-ant-…` and the last 4 characters). Someone with both the database and `ENCRYPTION_KEY` (in practice, whoever runs the deployment) can decrypt them, which is unavoidable because the daily job has to use them while users are away. Users should use a dedicated key with a spend limit.
-- Deleting an account removes its companies, scores, sessions and saved key.
+- Deleting an account removes its companies, scores, essays, sessions and saved key.
+- Job pages, essays and draft generation only work for jobs on boards the signed-in user tracks. After logging in from an email link you're returned to that job (only paths inside the app are allowed as return destinations).
 
 ## Running locally
 
@@ -69,6 +70,16 @@ npm run daily -- --dry-run   # run the daily check from the command line without
 - **Keywords** search the title, company, department, location, AI reason and the full job description. Every term must match as a whole word (`go` doesn't match "good"); use `"quotes"` for phrases and a trailing `*` for word beginnings (`infra*`).
 - **Sort** by most recently posted or by fit score. Unscored jobs sort last.
 - **Fit scores:** new jobs are scored automatically. To score jobs that were already open when you added a company, filter to the jobs you care about and click **Score unscored jobs in this view**; each click scores for about 3 minutes, so click again to continue. The daily run also scores a batch of unscored jobs with its leftover time. If you edit your resume, existing scores are shown faded and get rescored.
+
+## Job pages and essays
+
+Clicking a job (in the app or in the daily email) opens its page in the app: salary if posted, location, posting age, fit score, an **Apply on the company's site** button, and the job description.
+
+- **Application questions** are loaded the first time anyone opens the job and cached for a week. Greenhouse provides them (and pay ranges) through its official job board API. For Ashby they come from the GraphQL endpoint Ashby's own job pages use, which isn't an official API and could change; if it fails, the page says so and the Apply button still works.
+- **Essay questions** (free-text answers) each get an editor with a word count (showing the question's target length, e.g. 200-400 words), **Save** and **Copy**. The app can't submit applications; copy your answers into the company's form.
+- **Generate draft / Revise draft** writes an answer with Claude Opus 5.5 using your own API key (roughly 2-3 cents a draft), streamed into the editor. It uses your resume, the job description, optional guidance, and your most relevant past answers, which are listed so you can remove or add others. Drafts are told to use only facts from your materials and to leave [bracketed notes] where something's missing.
+- **Some companies have rules about AI-written answers.** When a form has a question about the company's AI policy (Anthropic's does), the job page shows it, with its links, above the essays. Read it before using a draft, and treat drafts as a starting point to rewrite in your own words.
+- **Essays page:** every saved answer, with search, editing and delete. Saved essays keep their own copy of the question, company and job title, so they stay available (and keep informing new drafts) after the job is gone.
 
 ## Data retention
 
@@ -107,6 +118,8 @@ Changing filters affects future new jobs and the Jobs page; it never re-announce
 - `lib/scoring.ts`: resume matching with Claude Haiku (structured JSON output); `lib/score-jobs.ts`: time-limited batch scoring
 - `lib/search.ts`: whole-word keyword search over open jobs
 - `lib/retention.ts`: the 90-day retention window and daily purge
+- `lib/ats/details.ts`: application questions and pay ranges; `lib/job-details.ts`: the job page loader
+- `lib/essays.ts`: saved essays and finding related ones; `lib/drafts.ts` and `app/api/essays/generate`: draft generation
 - `lib/run.ts`: the daily pipeline; `lib/email.ts`: the digest email
 - `lib/auth.ts`: accounts and sessions; `lib/crypto.ts`: password hashing and API-key encryption
 - `lib/schema.ts`: database schema

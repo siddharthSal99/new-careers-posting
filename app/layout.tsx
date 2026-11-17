@@ -19,6 +19,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <>
               <Link href="/">Companies</Link>
               <Link href="/jobs">Jobs</Link>
+              <Link href="/essays">Essays</Link>
               <Link href="/settings" title={user.email}>Settings</Link>
             </>
           ) : (

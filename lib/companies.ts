@@ -57,7 +57,9 @@ export async function syncBoard(boardId: number, fetched: FetchedJob[]): Promise
   const sql = await db();
   return sql.begin(async (tx) => {
     const existing = await tx`
-      select id, external_id, title, location, removed_at, description is null as no_description
+      select id, external_id, title, location, removed_at, salary, apply_url,
+             -- missing, or saved by an older version that left HTML entities like &rsquo; in the text
+             (description is null or description ~ '&[A-Za-z]+;') as refresh_description
       from jobs where company_id = ${boardId}`;
     const byExt = new Map(existing.map((r) => [r.external_id as string, r]));
     const byKey = new Map<string, number>();
@@ -75,15 +77,31 @@ export async function syncBoard(boardId: number, fetched: FetchedJob[]): Promise
     // Descriptions are only needed while a job is open.
     if (gone.length) await tx`update jobs set removed_at = now(), description = null where id = any(${gone})`;
 
-    // Fill in descriptions for open jobs that don't have one (saved before descriptions were stored, or reopened).
+    // Fill in descriptions for open jobs that don't have a usable one (missing, reopened, or saved with raw HTML entities).
     const fill = existing
-      .filter((r) => r.no_description && seen.get(r.external_id)?.description)
+      .filter((r) => r.refresh_description && seen.get(r.external_id)?.description)
       .map((r) => ({ id: r.id as number, d: seen.get(r.external_id)!.description }));
     for (let i = 0; i < fill.length; i += 200) {
       const chunk = fill.slice(i, i + 200);
       await tx`
         update jobs set description = v.d
         from (select unnest(${chunk.map((f) => f.id)}::int[]) as id, unnest(${chunk.map((f) => f.d)}::text[]) as d) v
+        where jobs.id = v.id`;
+    }
+
+    // Fill in pay ranges and apply links for jobs saved before they were recorded.
+    const extras = existing
+      .filter((r) => {
+        const f = seen.get(r.external_id);
+        return f && ((!r.salary && f.salary) || (!r.apply_url && f.applyUrl));
+      })
+      .map((r) => ({ id: r.id as number, s: seen.get(r.external_id)!.salary ?? null, a: seen.get(r.external_id)!.applyUrl ?? null }));
+    for (let i = 0; i < extras.length; i += 500) {
+      const chunk = extras.slice(i, i + 500);
+      await tx`
+        update jobs set salary = coalesce(jobs.salary, v.s), apply_url = coalesce(jobs.apply_url, v.a)
+        from (select unnest(${chunk.map((f) => f.id)}::int[]) as id, unnest(${chunk.map((f) => f.s)}::text[]) as s,
+                     unnest(${chunk.map((f) => f.a)}::text[]) as a) v
         where jobs.id = v.id`;
     }
 
@@ -98,6 +116,8 @@ export async function syncBoard(boardId: number, fetched: FetchedJob[]): Promise
       posted_at: j.postedAt,
       repost_of: byKey.get(repostKey(j.title, j.location)) ?? null,
       description: j.description || null,
+      salary: j.salary ?? null,
+      apply_url: j.applyUrl ?? null,
     }));
     for (let i = 0; i < rows.length; i += 500) {
       await tx`insert into jobs ${tx(rows.slice(i, i + 500))} on conflict (company_id, external_id) do nothing`;

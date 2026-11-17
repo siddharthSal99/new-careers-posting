@@ -220,7 +220,8 @@ async function processUser(userId: number, scoreBudgetMs: number, dryRun: boolea
       title: j.title,
       location: j.location,
       department: j.department,
-      url: j.url,
+      // Link to the job page in the app (essays, salary, apply button); the company site if APP_URL isn't set.
+      url: appUrl ? `${appUrl}/jobs/${j.id}` : j.url,
       postedAt: j.posted_at,
       repost: j.repost_of !== null,
       score: j.score,
