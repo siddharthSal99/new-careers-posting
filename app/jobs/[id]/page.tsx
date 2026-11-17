@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { aiPolicyQuestion } from "@/lib/ats/details";
 import { requireUser } from "@/lib/auth";
+import { essaysForJob } from "@/lib/essays";
 import { getJobPage } from "@/lib/job-details";
+import { saveJobEssayAction } from "../../actions";
+import { EssayEditor } from "../../essay-editor";
 import { age } from "@/lib/views";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +23,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const aiPolicy = aiPolicyQuestion(questions);
   const otherRequired = questions.filter((q) => !q.essay && q.required && q !== aiPolicy);
   const posted = job.postedAt ?? job.firstSeenAt;
+  const saved = await essaysForJob(user.id, job.id);
 
   return (
     <>
@@ -81,14 +85,23 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
       {job.questions && essays.length === 0 && <p className="muted small">This application has no essay questions.</p>}
-      {essays.map((q) => (
-        <div key={q.key} className="panel" style={{ marginBottom: 12 }}>
-          <div style={{ fontWeight: 600 }}>
-            {q.label} {q.required ? <span className="chip warn">required</span> : <span className="chip">optional</span>}
+      {essays.map((q) => {
+        const essay = saved.get(q.key);
+        return (
+          <div key={q.key} className="panel" style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 600 }}>
+              {q.label} {q.required ? <span className="chip warn">required</span> : <span className="chip">optional</span>}
+            </div>
+            {q.description && <p className="muted small" style={{ whiteSpace: "pre-wrap" }}>{q.description}</p>}
+            <EssayEditor
+              initialAnswer={essay?.answer ?? ""}
+              initialSavedAt={essay?.updatedAt.toISOString() ?? null}
+              hint={`${q.label} ${q.description}`}
+              save={saveJobEssayAction.bind(null, job.id, q.key)}
+            />
           </div>
-          {q.description && <p className="muted small" style={{ whiteSpace: "pre-wrap" }}>{q.description}</p>}
-        </div>
-      ))}
+        );
+      })}
       {otherRequired.length > 0 && (
         <details className="small" style={{ margin: "12px 0" }}>
           <summary>Other required questions on the form ({otherRequired.length})</summary>

@@ -8,6 +8,8 @@ import { changePassword, deleteAccount, logIn, logOut, requireUser, safeNext, si
 import { subscribe, unsubscribe } from "@/lib/companies";
 import { encryptSecret } from "@/lib/crypto";
 import { anthropicKeyContext, db, saveSettings } from "@/lib/db";
+import { deleteEssay, saveJobEssay, updateEssay } from "@/lib/essays";
+import { getJobPage } from "@/lib/job-details";
 import { runDaily, type RunSummary } from "@/lib/run";
 import { backfillScores, type BackfillResult } from "@/lib/score-jobs";
 import { keyHint, validateAnthropicKey } from "@/lib/scoring";
@@ -207,4 +209,46 @@ export async function scoreJobsAction(_prev: BackfillResult | null, formData: Fo
   const res = await backfillScores(user.id, { ids: ids.length ? ids : undefined, budgetMs: 200_000 });
   revalidatePath("/jobs");
   return res;
+}
+
+// ---------- Essays ----------
+
+const MAX_ESSAY_CHARS = 20_000;
+
+export type EssaySaveResult = { ok: true; savedAt: string | null } | { ok: false; error: string };
+
+/** Saves the user's answer to an essay question on a job they track. An empty answer deletes the saved one. */
+export async function saveJobEssayAction(jobId: number, questionKey: string, answer: string): Promise<EssaySaveResult> {
+  const user = await requireUser();
+  if (answer.length > MAX_ESSAY_CHARS) return { ok: false, error: `That's over ${MAX_ESSAY_CHARS.toLocaleString()} characters.` };
+  const job = await getJobPage(user.id, Number(jobId));
+  if (!job) return { ok: false, error: "Job not found." };
+  const q = job.questions?.find((x) => x.key === questionKey && x.essay);
+  if (!q) return { ok: false, error: "That question isn't on this job's form any more." };
+  const saved = await saveJobEssay(user.id, {
+    jobId: job.id,
+    questionKey: q.key,
+    question: q.label,
+    questionDescription: q.description,
+    company: job.company,
+    jobTitle: job.title,
+    answer,
+  });
+  revalidatePath("/essays");
+  return { ok: true, savedAt: saved ? saved.updatedAt.toISOString() : null };
+}
+
+export async function updateEssayAction(essayId: number, answer: string): Promise<EssaySaveResult> {
+  const user = await requireUser();
+  if (answer.length > MAX_ESSAY_CHARS) return { ok: false, error: `That's over ${MAX_ESSAY_CHARS.toLocaleString()} characters.` };
+  const saved = await updateEssay(user.id, Number(essayId), answer);
+  if (!saved) return { ok: false, error: "Essay not found." };
+  revalidatePath("/essays");
+  return { ok: true, savedAt: saved.updatedAt.toISOString() };
+}
+
+export async function deleteEssayAction(essayId: number) {
+  const user = await requireUser();
+  await deleteEssay(user.id, Number(essayId));
+  revalidatePath("/essays");
 }
