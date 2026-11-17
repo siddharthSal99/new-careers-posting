@@ -2,10 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { aiPolicyQuestion } from "@/lib/ats/details";
 import { requireUser } from "@/lib/auth";
-import { essaysForJob } from "@/lib/essays";
+import { getSettings } from "@/lib/db";
+import { essaysForJob, listEssays, similarEssays, type Essay } from "@/lib/essays";
 import { getJobPage } from "@/lib/job-details";
 import { saveJobEssayAction } from "../../actions";
-import { EssayEditor } from "../../essay-editor";
+import { JobEssay } from "./job-essay";
+
+const refLabel = (e: Essay) => `${e.company}: ${e.question.length > 50 ? `${e.question.slice(0, 50)}…` : e.question}`;
 import { age } from "@/lib/views";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +26,18 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const aiPolicy = aiPolicyQuestion(questions);
   const otherRequired = questions.filter((q) => !q.essay && q.required && q !== aiPolicy);
   const posted = job.postedAt ?? job.firstSeenAt;
-  const saved = await essaysForJob(user.id, job.id);
+  const [saved, settings, library] = await Promise.all([essaysForJob(user.id, job.id), getSettings(user.id), listEssays(user.id)]);
+  const cantGenerateReason = !settings.anthropicKeyHint
+    ? "Add your Anthropic API key to generate drafts:"
+    : !settings.resume.trim()
+      ? "Paste your resume to generate drafts:"
+      : null;
+  const suggestions = new Map(
+    await Promise.all(
+      essays.map(async (q) => [q.key, await similarEssays(user.id, { question: q.label, description: q.description, company: job.company, excludeJobId: job.id })] as const),
+    ),
+  );
+  const libraryRefs = library.filter((e) => e.jobId !== job.id).map((e) => ({ id: e.id, label: refLabel(e) }));
 
   return (
     <>
@@ -93,11 +107,18 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               {q.label} {q.required ? <span className="chip warn">required</span> : <span className="chip">optional</span>}
             </div>
             {q.description && <p className="muted small" style={{ whiteSpace: "pre-wrap" }}>{q.description}</p>}
-            <EssayEditor
+            <JobEssay
+              jobId={job.id}
+              questionKey={q.key}
+              hint={`${q.label} ${q.description}`}
               initialAnswer={essay?.answer ?? ""}
               initialSavedAt={essay?.updatedAt.toISOString() ?? null}
-              hint={`${q.label} ${q.description}`}
               save={saveJobEssayAction.bind(null, job.id, q.key)}
+              canGenerate={!cantGenerateReason}
+              cantGenerateReason={cantGenerateReason}
+              suggested={(suggestions.get(q.key)?.essays ?? []).map((e) => ({ id: e.id, label: refLabel(e) }))}
+              related={suggestions.get(q.key)?.related ?? false}
+              library={libraryRefs}
             />
           </div>
         );

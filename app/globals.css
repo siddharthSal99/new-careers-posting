@@ -89,3 +89,4 @@ a.button:hover { text-decoration: none; opacity: 0.9; }
 .job-facts { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: center; }
 .job-apply { margin-left: auto; }
 @media (max-width: 640px) { .job-apply { margin-left: 0; width: 100%; } .job-apply a.button { display: block; text-align: center; } }
+.chip-x { background: none; border: none; color: inherit; padding: 0 0 0 2px; font-size: 14px; line-height: 1; cursor: pointer; font-weight: 400; }
