@@ -92,3 +92,9 @@ a.button:hover { text-decoration: none; opacity: 0.9; }
 .chip-x { background: none; border: none; color: inherit; padding: 0 0 0 2px; font-size: 14px; line-height: 1; cursor: pointer; font-weight: 400; }
 .discover-list { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; }
 input[type="file"] { display: block; margin: 6px 0; max-width: 100%; }
+.fit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 8px; }
+.fit-cat { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.fit-list { margin: 6px 0 0; padding-left: 18px; }
+.fit-list li { margin: 2px 0; }
+.fit-match::marker { content: "✓  "; color: var(--good); }
+.fit-gap::marker { content: "✗  "; color: var(--bad); }

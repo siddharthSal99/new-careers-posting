@@ -10,6 +10,8 @@ import { encryptSecret } from "@/lib/crypto";
 import { anthropicKeyContext, db, saveSettings } from "@/lib/db";
 import { deleteEssay, saveJobEssay, updateEssay } from "@/lib/essays";
 import { getJobPage } from "@/lib/job-details";
+import { adoptExplainedScore, explainFit, type Explanation } from "@/lib/explain";
+import Anthropic from "@anthropic-ai/sdk";
 import { runDaily, type RunSummary } from "@/lib/run";
 import { backfillScores, type BackfillResult } from "@/lib/score-jobs";
 import { keyHint, validateAnthropicKey } from "@/lib/scoring";
@@ -251,4 +253,33 @@ export async function deleteEssayAction(essayId: number) {
   const user = await requireUser();
   await deleteEssay(user.id, Number(essayId));
   revalidatePath("/essays");
+}
+
+// ---------- Explaining a fit score ----------
+
+export type ExplainResult = { ok: true; explanation: Explanation } | { ok: false; error: string };
+
+export async function explainFitAction(jobId: number, context: string): Promise<ExplainResult> {
+  const user = await requireUser();
+  const job = await getJobPage(user.id, Number(jobId));
+  if (!job) return { ok: false, error: "Job not found." };
+  try {
+    return { ok: true, explanation: await explainFit(user.id, job, String(context ?? "").slice(0, 3000)) };
+  } catch (e) {
+    const err = e as Error;
+    console.error(`explain failed for user ${user.id}, job ${job.id}:`, err.message);
+    return { ok: false, error: err instanceof Anthropic.AuthenticationError ? "Anthropic rejected your API key. Update it in Settings." : err.message.slice(0, 300) };
+  }
+}
+
+export async function adoptExplainedScoreAction(jobId: number): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  try {
+    await adoptExplainedScore(user.id, Number(jobId));
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  revalidatePath(`/jobs/${Number(jobId)}`);
+  revalidatePath("/jobs");
+  return { ok: true };
 }
