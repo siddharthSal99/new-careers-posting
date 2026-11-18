@@ -71,7 +71,7 @@ th { font-size: 13px; color: var(--muted); font-weight: 600; }
 details > summary { cursor: pointer; }
 @media (max-width: 640px) {
   .hide-sm { display: none; }
-  nav { gap: 14px; }
+  nav { gap: 6px 14px; flex-wrap: wrap; }
 }
 select {
   width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
@@ -90,3 +90,5 @@ a.button:hover { text-decoration: none; opacity: 0.9; }
 .job-apply { margin-left: auto; }
 @media (max-width: 640px) { .job-apply { margin-left: 0; width: 100%; } .job-apply a.button { display: block; text-align: center; } }
 .chip-x { background: none; border: none; color: inherit; padding: 0 0 0 2px; font-size: 14px; line-height: 1; cursor: pointer; font-weight: 400; }
+.discover-list { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; }
+input[type="file"] { display: block; margin: 6px 0; max-width: 100%; }

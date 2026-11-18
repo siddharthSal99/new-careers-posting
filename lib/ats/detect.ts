@@ -40,7 +40,7 @@ export function guessTokens(hostname: string): string[] {
 
 export interface Detection {
   ref: BoardRef;
-  how: "url" | "page" | "guess";
+  how: "url" | "page" | "guess" | "search";
 }
 
 /**
@@ -61,6 +61,7 @@ export async function detectBoard(input: string): Promise<{ detection: Detection
   const direct = findBoardRefs(url.href)[0];
   if (direct) return { detection: { ref: direct, how: "url" }, notes };
 
+  if (!isPublicHttpUrl(url)) return { detection: null, notes: ["That address isn't a public website."] };
   try {
     const res = await fetchWithTimeout(url.href, 15_000, {
       headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130 Safari/537.36" },
@@ -121,4 +122,66 @@ export async function previewBoard(ref: BoardRef) {
     companyName: companyName ?? ref.token.charAt(0).toUpperCase() + ref.token.slice(1),
     departments: [...departments.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
   };
+}
+
+// ---------- Guessing a board from a company name (used by Discover) ----------
+
+/** Board names worth trying for a company name, e.g. "Black Forest Labs" -> black-forest-labs, blackforestlabs, … */
+export function nameTokens(name: string): string[] {
+  const base = name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\.(ai|io|com|co|app|art)$/, "");
+  const words = base.split(/[^a-z0-9]+/).filter(Boolean);
+  if (!words.length) return [];
+  const core = words.filter((w) => !["inc", "ltd", "llc", "the", "co", "corp", "hq"].includes(w));
+  const w = core.length ? core : words;
+  const out = [
+    w.join(""),
+    w.join("-"),
+    `${w.join("")}ai`,
+    `${w.join("-")}-ai`,
+    `${w.join("")}labs`,
+    `${w.join("")}hq`,
+    w.length > 1 ? w[0] : "",
+    // "Kling AI" -> kling; "Inworld AI" -> inworld
+    w.length > 1 && /^(ai|labs|studios?|technologies|tech)$/.test(w[w.length - 1]) ? w.slice(0, -1).join("") : "",
+  ];
+  return [...new Set(out.filter((t) => t.length >= 2))];
+}
+
+/** Tries likely board names from a company's URL (if any) and name on every supported platform. Free: public APIs only. */
+export async function guessBoard(name: string, urlHint?: string | null): Promise<Detection | null> {
+  const tokens: string[] = [];
+  if (urlHint) {
+    try {
+      tokens.push(...guessTokens(new URL(/^https?:\/\//.test(urlHint) ? urlHint : `https://${urlHint}`).hostname));
+    } catch {
+      // not a URL; use the name only
+    }
+  }
+  tokens.push(...nameTokens(name));
+  for (const token of [...new Set(tokens)]) {
+    const found = await Promise.all((["ashby", "greenhouse", "lever"] as const).map(async (ats) => ((await boardExists({ ats, token })) ? ats : null)));
+    const ats = found.find(Boolean);
+    if (ats) return { ref: { ats, token }, how: "guess" };
+  }
+  return null;
+}
+
+/**
+ * Whether a URL is safe for the server to fetch: http(s) on a public hostname. Pages come from user input,
+ * screenshots and web search, so internal addresses (localhost, private IPs, cloud metadata) are refused.
+ */
+export function isPublicHttpUrl(u: URL): boolean {
+  if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || !h.includes(".")) return false;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(h)) {
+    const [a, b] = h.split(".").map(Number);
+    if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)) return false;
+  }
+  if (h.includes(":")) return false; // IPv6 literals
+  return true;
 }

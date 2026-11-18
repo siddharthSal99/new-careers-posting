@@ -140,7 +140,7 @@ export async function previewAction(_prev: PreviewState, formData: FormData): Pr
       ats: detection.ref.ats,
       atsLabel: ATS_LABEL[detection.ref.ats],
       token: detection.ref.token,
-      how: { url: "from the URL", page: "linked from the careers page", guess: "guessed from the domain — check the name and count" }[detection.how],
+      how: { url: "from the URL", page: "linked from the careers page", guess: "guessed from the domain — check the name and count", search: "found by web search" }[detection.how],
       name: String(formData.get("name") ?? "").trim() || p.companyName,
       total: p.jobs.length,
       tooOld: p.tooOld,

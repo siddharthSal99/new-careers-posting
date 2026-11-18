@@ -2,10 +2,9 @@
 
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { defaultDepartments } from "@/lib/departments";
 import { previewAction, saveCompanyAction, type PreviewState } from "./actions";
 
-const ENGINEERING = /engineer|software|research|infra|platform|scaling|product|applied|security|data|compute|\bml\b|machine|hardware|developer/i;
-const NOT_ENGINEERING = /sales|market|finance|legal|people|recruit|communications|policy|go to market|operations|partnership|workplace|support|product management|product design|\bgov/i;
 
 function Submit({ children, pendingText }: { children: React.ReactNode; pendingText: string }) {
   const { pending } = useFormStatus();
@@ -29,7 +28,7 @@ export function AddCompany() {
           <input type="hidden" name="sourceUrl" value={state.sourceUrl} />
           <label htmlFor="name">Company name</label>
           <input id="name" name="name" type="text" defaultValue={state.name} />
-          <DepartmentPicker departments={state.departments} selected={state.departments.filter((d) => ENGINEERING.test(d.name) && !NOT_ENGINEERING.test(d.name)).map((d) => d.name)} />
+          <DepartmentPicker departments={state.departments} selected={defaultDepartments(state.departments.map((d) => d.name))} />
           <p className="muted small">
             All {state.total} current jobs are saved as already seen. From tomorrow you'll be emailed only jobs that are new and match these departments and your filters in Settings.
           </p>
