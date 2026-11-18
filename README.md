@@ -4,7 +4,7 @@ Tracks the careers pages of companies you care about and emails you once a day w
 
 Multiple people can use one deployment. Each user has their own account, companies, filters, resume, digest email and Anthropic API key; job boards that several people track are fetched once.
 
-- Paste a careers page URL (e.g. `https://openai.com/careers/search/`). The app finds the company's Greenhouse or Ashby job board behind it and saves every current job as already seen.
+- Paste a careers page URL (e.g. `https://openai.com/careers/search/`). The app finds the company's Greenhouse, Ashby or Lever job board behind it and saves every current job as already seen.
 - Once a day it fetches each board, compares it with what's saved, and emails you the jobs that are new **and** match your filters. If nothing is new, no email is sent.
 - The email stays short however many companies you track: it lists your best matches (15 by default) and counts the rest per company, with links to them in the app. With AI matching on, only jobs scoring at or above your minimum (7/10 by default) are listed, and if none qualify no email is sent. Both limits are in Settings.
 - Filters: departments (per company), title keywords, and locations (with an option for remote).
@@ -12,12 +12,12 @@ Multiple people can use one deployment. Each user has their own account, compani
 - Also tracks removed jobs, flags likely reposts (same title and location as an earlier job), and warns you in the email if a board keeps failing to load.
 - Only jobs posted in the last 3 months are kept (see [Data retention](#data-retention)).
 
-Supported job boards: **Greenhouse** and **Ashby**.
+Supported job boards: **Greenhouse**, **Ashby** and **Lever**.
 
 ## How it finds the board
 
-1. The URL is a board URL itself (`jobs.ashbyhq.com/openai`, `job-boards.greenhouse.io/anthropic`).
-2. Otherwise it loads the careers page and looks for links to a Greenhouse or Ashby board (this is how `anthropic.com/careers/jobs` is found).
+1. The URL is a board URL itself (`jobs.ashbyhq.com/openai`, `job-boards.greenhouse.io/anthropic`, `jobs.lever.co/palantir`).
+2. Otherwise it loads the careers page and looks for links to a Greenhouse, Ashby or Lever board (this is how `anthropic.com/careers/jobs` is found).
 3. If the page blocks automated requests (openai.com does), it guesses the board name from the domain (`openai`) and checks whether that board exists and has jobs. Guessed matches are labelled so you can check the name and job count before saving.
 
 Daily checks call only the boards' public JSON APIs, never the company's own website.
@@ -76,7 +76,7 @@ npm run daily -- --dry-run   # run the daily check from the command line without
 Clicking a job (in the app or in the daily email) opens its page in the app: salary if posted, location, posting age, fit score, an **Apply on the company's site** button, and the job description.
 
 - **Application questions** are loaded the first time anyone opens the job and cached for a week. Greenhouse provides them (and pay ranges) through its official job board API. For Ashby they come from the GraphQL endpoint Ashby's own job pages use, which isn't an official API and could change; if it fails, the page says so and the Apply button still works.
-- **Essay questions** (free-text answers) each get an editor with a word count (showing the question's target length, e.g. 200-400 words), **Save** and **Copy**. The app can't submit applications; copy your answers into the company's form.
+- **Essay questions** (free-text answers; not available for Lever jobs, whose public API doesn't include the application form) each get an editor with a word count (showing the question's target length, e.g. 200-400 words), **Save** and **Copy**. The app can't submit applications; copy your answers into the company's form.
 - **Generate draft / Revise draft** writes an answer with Claude Opus 5.5 using your own API key (roughly 2-3 cents a draft), streamed into the editor. It uses your resume, the job description, optional guidance, and your most relevant past answers, which are listed so you can remove or add others. Drafts are told to use only facts from your materials and to leave [bracketed notes] where something's missing.
 - **Some companies have rules about AI-written answers.** When a form has a question about the company's AI policy (Anthropic's does), the job page shows it, with its links, above the essays. Read it before using a draft, and treat drafts as a starting point to rewrite in your own words.
 - **Essays page:** every saved answer, with search, editing and delete. Saved essays keep their own copy of the question, company and job title, so they stay available (and keep informing new drafts) after the job is gone.
@@ -112,7 +112,7 @@ Changing filters affects future new jobs and the Jobs page; it never re-announce
 
 ## Project layout
 
-- `lib/ats/`: Greenhouse and Ashby adapters, plus board detection
+- `lib/ats/`: Greenhouse, Ashby and Lever adapters, plus board detection
 - `lib/companies.ts`: adding a company (baseline) and diffing a fresh fetch against stored jobs
 - `lib/filters.ts`: department, title and location filters
 - `lib/scoring.ts`: resume matching with Claude Haiku (structured JSON output); `lib/score-jobs.ts`: time-limited batch scoring

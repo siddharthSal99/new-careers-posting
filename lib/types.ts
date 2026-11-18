@@ -1,4 +1,4 @@
-export type AtsKind = "greenhouse" | "ashby";
+export type AtsKind = "greenhouse" | "ashby" | "lever";
 
 /** A job as returned by a board adapter, normalized across platforms. */
 export interface FetchedJob {

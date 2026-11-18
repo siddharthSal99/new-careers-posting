@@ -155,7 +155,7 @@ export async function previewAction(_prev: PreviewState, formData: FormData): Pr
 export async function saveCompanyAction(formData: FormData) {
   const user = await requireUser();
   const ats = String(formData.get("ats"));
-  if (ats !== "greenhouse" && ats !== "ashby") throw new Error("unsupported board type");
+  if (ats !== "greenhouse" && ats !== "ashby" && ats !== "lever") throw new Error("unsupported board type");
   const token = String(formData.get("token"));
   const all = formData.get("allDepartments") === "on";
   const departments = all ? [] : formData.getAll("departments").map(String);

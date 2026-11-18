@@ -6,6 +6,8 @@ const PATTERNS: { ats: AtsKind; re: RegExp }[] = [
   { ats: "ashby", re: /jobs\.ashbyhq\.com\/([A-Za-z0-9._-]+)/g },
   { ats: "ashby", re: /api\.ashbyhq\.com\/posting-api\/job-board\/([A-Za-z0-9._-]+)/g },
   { ats: "greenhouse", re: /boards-api\.greenhouse\.io\/v1\/boards\/([A-Za-z0-9_-]+)/g },
+  { ats: "lever", re: /jobs\.(?:eu\.)?lever\.co\/([A-Za-z0-9._-]+)/g },
+  { ats: "lever", re: /api\.(?:eu\.)?lever\.co\/v0\/postings\/([A-Za-z0-9._-]+)/g },
   { ats: "greenhouse", re: /(?:job-boards|boards)(?:\.eu)?\.greenhouse\.io\/embed\/job_board(?:\/js)?\?for=([A-Za-z0-9_-]+)/g },
   { ats: "greenhouse", re: /(?:job-boards|boards)(?:\.eu)?\.greenhouse\.io\/(?!embed\b)([A-Za-z0-9_-]+)/g },
 ];
@@ -68,7 +70,7 @@ export async function detectBoard(input: string): Promise<{ detection: Detection
       for (const ref of refs.slice(0, 3)) {
         if (await boardExists(ref)) return { detection: { ref, how: "page" }, notes };
       }
-      notes.push("The careers page loaded but didn't mention a Greenhouse or Ashby board.");
+      notes.push("The careers page loaded but didn't mention a Greenhouse, Ashby or Lever board.");
     } else {
       notes.push(`The careers page refused the request (HTTP ${res.status}); trying to guess the board name instead.`);
     }
@@ -77,12 +79,12 @@ export async function detectBoard(input: string): Promise<{ detection: Detection
   }
 
   for (const token of guessTokens(url.hostname)) {
-    for (const ats of ["ashby", "greenhouse"] as const) {
+    for (const ats of ["ashby", "greenhouse", "lever"] as const) {
       const ref = { ats, token };
       if (await boardExists(ref)) return { detection: { ref, how: "guess" }, notes };
     }
   }
-  notes.push("No Greenhouse or Ashby board found. Paste the board URL itself (e.g. jobs.ashbyhq.com/company).");
+  notes.push("No Greenhouse, Ashby or Lever board found. Paste the board URL itself (e.g. jobs.ashbyhq.com/company or jobs.lever.co/company).");
   return { detection: null, notes };
 }
 
@@ -90,13 +92,17 @@ async function boardExists(ref: BoardRef): Promise<boolean> {
   const url =
     ref.ats === "ashby"
       ? `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(ref.token)}`
-      : `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(ref.token)}/jobs`;
+      : ref.ats === "lever"
+        ? `https://api.lever.co/v0/postings/${encodeURIComponent(ref.token)}?mode=json&limit=1`
+        : `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(ref.token)}/jobs`;
   try {
     const res = await fetchWithTimeout(url, 30_000);
     if (!res.ok) return false;
     // Require at least one job: guessed names can match unrelated, empty boards.
-    const body = (await res.json()) as { jobs?: unknown[] };
-    return Array.isArray(body.jobs) && body.jobs.length > 0;
+    const body = (await res.json()) as { jobs?: unknown[] } | unknown[];
+    // Lever returns a bare array of postings.
+    const jobs = Array.isArray(body) ? body : body.jobs;
+    return Array.isArray(jobs) && jobs.length > 0;
   } catch {
     return false;
   }

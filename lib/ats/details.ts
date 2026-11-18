@@ -17,6 +17,8 @@ export interface AppQuestion {
 export interface JobDetails {
   salary: string | null;
   questions: AppQuestion[];
+  /** Set when the platform doesn't publish application questions (Lever). */
+  questionsUnavailable?: string;
 }
 
 function linksIn(html: string) {
@@ -131,6 +133,10 @@ async function ashbyDetails(token: string, jobId: string): Promise<JobDetails> {
 }
 
 export async function fetchJobDetails(ats: AtsKind, token: string, externalId: string): Promise<JobDetails> {
+  if (ats === "lever") {
+    // Lever's public API doesn't include the application form; pay comes from the list API (stored at sync).
+    return { salary: null, questions: [], questionsUnavailable: "Lever doesn't share application questions, so check the form on the company's site." };
+  }
   return ats === "greenhouse" ? greenhouseDetails(token, externalId) : ashbyDetails(token, externalId);
 }
 

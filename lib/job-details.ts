@@ -31,6 +31,8 @@ export interface JobPage {
   questions: AppQuestion[] | null;
   /** Why the questions couldn't be loaded, if they couldn't. */
   detailsError: string | null;
+  /** The platform doesn't publish application questions at all. */
+  questionsUnavailable: string | null;
 }
 
 /**
@@ -49,7 +51,7 @@ export async function getJobPage(userId: number, jobId: number): Promise<JobPage
     where j.id = ${jobId}`;
   if (!r) return null;
 
-  let details = r.details as { salary: string | null; questions: AppQuestion[] } | null;
+  let details = r.details as { salary: string | null; questions: AppQuestion[]; questionsUnavailable?: string } | null;
   let detailsError: string | null = null;
   const stale = !r.details_fetched_at || Date.now() - r.details_fetched_at.getTime() > DETAILS_TTL_MS;
   // Closed jobs keep whatever was fetched while they were open.
@@ -89,7 +91,8 @@ export async function getJobPage(userId: number, jobId: number): Promise<JobPage
     verdict: r.verdict,
     reason: r.reason,
     blockers: r.blockers,
-    questions: details?.questions ?? null,
+    questions: details?.questionsUnavailable ? null : (details?.questions ?? null),
     detailsError,
+    questionsUnavailable: details?.questionsUnavailable ?? null,
   };
 }

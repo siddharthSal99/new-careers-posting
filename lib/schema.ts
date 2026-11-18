@@ -1,6 +1,6 @@
 // Applied automatically on first database use; every statement is idempotent.
 export const SCHEMA = `
--- A job board (Greenhouse or Ashby). Shared by every user who tracks it, so each board is fetched once a day.
+-- A job board (Greenhouse, Ashby or Lever). Shared by every user who tracks it, so each board is fetched once a day.
 create table if not exists companies (
   id serial primary key,
   name text not null,
