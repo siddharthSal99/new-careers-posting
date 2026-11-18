@@ -81,12 +81,25 @@ Clicking a job (in the app or in the daily email) opens its page in the app: sal
 - **Some companies have rules about AI-written answers.** When a form has a question about the company's AI policy (Anthropic's does), the job page shows it, with its links, above the essays. Read it before using a draft, and treat drafts as a starting point to rewrite in your own words.
 - **Essays page:** every saved answer, with search, editing and delete. Saved essays keep their own copy of the question, company and job title, so they stay available (and keep informing new drafts) after the job is gone.
 
+## Discover
+
+The tracker monitors companies you've chosen; **Discover** helps you find new ones. Upload (or paste) up to 5 screenshots of a list of companies, such as a LinkedIn post of startups that are hiring:
+
+1. **Read** (Claude Haiku, under 1¢): the company names, and careers URLs if shown, are pulled out of the images.
+2. **Pick:** you get a checklist. Companies you already track are unticked, and you can edit names, untick or add companies. Nothing else runs until you click **Check**.
+3. **Find boards (free):** each company's Greenhouse, Ashby or Lever board is found from its URL or by trying likely board names built from its name. Matching roles are counted against your Settings filters (title keywords and locations). A board found only by guessing is flagged if its job descriptions don't mention the company, since it may belong to a different company with the same name.
+4. **Search the web (optional, about 2-4¢ each):** for companies not found, one Claude Sonnet web search finds the careers page; the result is then checked like a pasted URL. Addresses on private or internal networks are ignored.
+5. **Rate fit (one Claude Haiku call per batch, about 1-3¢):** a strong / possible / weak rating with a one-line note, based on your resume, each company's matching roles and a short description excerpt.
+6. **Track** adds a company to the tracker with the usual engineering departments pre-selected.
+
+All AI steps use your own API key. Results are saved, so you can leave and come back; discoveries are deleted after 90 days.
+
 ## Data retention
 
 To keep the database small, and because older postings are more likely to be stale:
 
 - Jobs posted more than 90 days ago (by the date on the company's job board) are never stored, even if they're still open. Adding a company shows how many open jobs that skips.
-- Each daily run first deletes stored jobs that have passed 90 days since posting, together with every user's scores for them, plus closed jobs removed more than 90 days ago, run logs older than 90 days, and expired login sessions.
+- Each daily run first deletes stored jobs that have passed 90 days since posting, together with every user's scores for them, plus closed jobs removed more than 90 days ago, run logs and Discover results older than 90 days, and expired login sessions.
 - A job with no posting date is kept while it's open, since deleting it would make it look new the next time the board is fetched. It's deleted 90 days after it closes.
 
 The window is `RETENTION_DAYS` in `lib/retention.ts`.
@@ -120,6 +133,7 @@ Changing filters affects future new jobs and the Jobs page; it never re-announce
 - `lib/retention.ts`: the 90-day retention window and daily purge
 - `lib/ats/details.ts`: application questions and pay ranges; `lib/job-details.ts`: the job page loader
 - `lib/essays.ts`: saved essays and finding related ones; `lib/drafts.ts` and `app/api/essays/generate`: draft generation
+- `lib/discover.ts`, `app/discover/` and `app/api/discover/extract`: Discover
 - `lib/run.ts`: the daily pipeline; `lib/email.ts`: the digest email
 - `lib/auth.ts`: accounts and sessions; `lib/crypto.ts`: password hashing and API-key encryption
 - `lib/schema.ts`: database schema

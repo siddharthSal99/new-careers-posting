@@ -22,6 +22,7 @@ export async function purgeOldData() {
     delete from jobs
     where posted_at < now() - ${window}::interval or removed_at < now() - ${window}::interval`;
   const runs = await sql`delete from runs where started_at < now() - ${window}::interval`;
+  await sql`delete from discovery_runs where created_at < now() - ${window}::interval`;
   const sessions = await sql`delete from sessions where expires_at < now()`;
   return { jobs: jobs.count, runs: runs.count, sessions: sessions.count };
 }

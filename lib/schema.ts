@@ -144,6 +144,44 @@ create table if not exists essays (
 create unique index if not exists essays_job_question_idx on essays (user_id, job_id, question_key) where job_id is not null;
 create index if not exists essays_user_idx on essays (user_id, updated_at desc);
 
+-- Discover: a batch of companies (e.g. read from a screenshot) checked for job boards and matching roles.
+create table if not exists discovery_runs (
+  id serial primary key,
+  user_id int not null references users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+create table if not exists discovery_rows (
+  id serial primary key,
+  run_id int not null references discovery_runs(id) on delete cascade,
+  user_id int not null references users(id) on delete cascade,
+  position int not null default 0,
+  name text not null,
+  -- careers URL shown in the screenshot, if any
+  url_hint text,
+  -- pending | found | not_found | unsupported | error
+  status text not null default 'pending',
+  ats text,
+  board_token text,
+  careers_url text,
+  -- how the board was found: url | page | guess | search
+  how text,
+  -- false when a guessed board may belong to a different company with the same name
+  verified boolean,
+  open_jobs int,
+  matching int,
+  top_titles text[],
+  top_locations text[],
+  fit text,
+  fit_note text,
+  -- the start of one job description, sent with the fit rating so the model knows what the company does
+  excerpt text,
+  error text,
+  searched boolean not null default false,
+  tracked boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+create index if not exists discovery_rows_run_idx on discovery_rows (run_id, position);
+
 create table if not exists runs (
   id serial primary key,
   started_at timestamptz not null default now(),
