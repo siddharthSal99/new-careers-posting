@@ -124,6 +124,8 @@ create table if not exists user_jobs (
   scored_resume_hash text,
   primary key (user_id, job_id)
 );
+-- added later: the on-demand "Explain score" analysis (see lib/explain.ts)
+alter table user_jobs add column if not exists explanation jsonb;
 
 -- A user's saved answer to an application question. Keeps its own copy of the question, company and job title,
 -- so it stays useful (e.g. as a reference for new drafts) after the job itself is deleted.

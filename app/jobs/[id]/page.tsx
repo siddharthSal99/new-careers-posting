@@ -4,14 +4,19 @@ import { aiPolicyQuestion } from "@/lib/ats/details";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
 import { essaysForJob, listEssays, similarEssays, type Essay } from "@/lib/essays";
+import { getExplanation } from "@/lib/explain";
 import { getJobPage } from "@/lib/job-details";
+import { resumeHash } from "@/lib/score-jobs";
 import { saveJobEssayAction } from "../../actions";
+import { FitExplainer } from "./fit-explainer";
 import { JobEssay } from "./job-essay";
 
 const refLabel = (e: Essay) => `${e.company}: ${e.question.length > 50 ? `${e.question.slice(0, 50)}…` : e.question}`;
 import { age } from "@/lib/views";
 
 export const dynamic = "force-dynamic";
+// "Explain this score" and draft saving run as server actions in this page's function.
+export const maxDuration = 120;
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const rawId = (await params).id;
@@ -26,7 +31,12 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const aiPolicy = aiPolicyQuestion(questions);
   const otherRequired = questions.filter((q) => !q.essay && q.required && q !== aiPolicy);
   const posted = job.postedAt ?? job.firstSeenAt;
-  const [saved, settings, library] = await Promise.all([essaysForJob(user.id, job.id), getSettings(user.id), listEssays(user.id)]);
+  const [saved, settings, library, explanation] = await Promise.all([
+    essaysForJob(user.id, job.id),
+    getSettings(user.id),
+    listEssays(user.id),
+    getExplanation(user.id, job.id),
+  ]);
   const cantGenerateReason = !settings.anthropicKeyHint
     ? "Add your Anthropic API key to generate drafts:"
     : !settings.resume.trim()
@@ -82,6 +92,21 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           {job.blockers && job.blockers.length > 0 && <div className="error">Blockers: {job.blockers.join("; ")}</div>}
         </div>
       )}
+      <FitExplainer
+        jobId={job.id}
+        initial={explanation}
+        currentScore={job.score}
+        stale={!!explanation && explanation.resumeHash !== resumeHash(settings.resume)}
+        cantReason={
+          !settings.anthropicKeyHint
+            ? "Add your Anthropic API key to analyze fit."
+            : !settings.resume.trim()
+              ? "Paste your resume to analyze fit."
+              : !job.description
+                ? "This job has no saved description to compare against."
+                : null
+        }
+      />
 
       <h2>Application questions</h2>
       {job.questionsUnavailable && <p className="notice small">{job.questionsUnavailable}</p>}
