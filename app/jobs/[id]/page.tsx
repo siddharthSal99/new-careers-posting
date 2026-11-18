@@ -84,6 +84,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
       )}
 
       <h2>Application questions</h2>
+      {job.questionsUnavailable && <p className="notice small">{job.questionsUnavailable}</p>}
       {job.detailsError && !job.questions && (
         <p className="notice small">Couldn't load this job's application form ({job.detailsError}). Use the Apply button to see it on the company's site.</p>
       )}
