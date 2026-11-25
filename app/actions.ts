@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { detectBoard, previewBoard } from "@/lib/ats/detect";
 import { ATS_LABEL } from "@/lib/ats";
-import { changePassword, deleteAccount, logIn, logOut, requireUser, safeNext, signUp } from "@/lib/auth";
+import { changePassword, confirmPassword, deleteAccount, logIn, logOut, logOutEverywhere, requireUser, safeNext, signUp } from "@/lib/auth";
 import { subscribe, unsubscribe } from "@/lib/companies";
 import { encryptSecret } from "@/lib/crypto";
 import { anthropicKeyContext, db, saveSettings } from "@/lib/db";
@@ -87,6 +87,12 @@ export async function saveSettingsAction(formData: FormData) {
 
 export async function saveAnthropicKeyAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requireUser();
+  const sql = await db();
+  const [existing] = await sql`select anthropic_key_enc is not null as has_key from users where id = ${user.id}`;
+  // Replacing a saved key needs the password, so a borrowed session can't swap it out.
+  if (existing?.has_key && !(await confirmPassword(user.id, String(formData.get("password") ?? "")))) {
+    return { error: "Enter your current password to replace the key." };
+  }
   const key = String(formData.get("apiKey") ?? "").trim();
   const check = await validateAnthropicKey(key);
   if (!check.ok) return { error: check.error };
@@ -96,17 +102,26 @@ export async function saveAnthropicKeyAction(_prev: FormState, formData: FormDat
   } catch (e) {
     return { error: `The server can't store keys yet: ${(e as Error).message}` };
   }
-  const sql = await db();
   await sql`update users set anthropic_key_enc = ${enc}, anthropic_key_hint = ${keyHint(key)} where id = ${user.id}`;
   revalidatePath("/", "layout");
   return { ok: "Key saved. AI matching is on." };
 }
 
-export async function removeAnthropicKeyAction() {
+export async function removeAnthropicKeyAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requireUser();
+  if (!(await confirmPassword(user.id, String(formData.get("password") ?? "")))) {
+    return { error: "Enter your current password to remove the key." };
+  }
   const sql = await db();
   await sql`update users set anthropic_key_enc = null, anthropic_key_hint = null where id = ${user.id}`;
   revalidatePath("/", "layout");
+  return { ok: "Key removed." };
+}
+
+export async function logOutEverywhereAction() {
+  const user = await requireUser();
+  await logOutEverywhere(user.id);
+  redirect("/login");
 }
 
 // ---------- Companies ----------

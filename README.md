@@ -49,7 +49,8 @@ The daily check is scheduled in `vercel.json` (`0 14 * * *`, i.e. 14:00 UTC). On
 ## Accounts and security
 
 - Passwords are hashed with scrypt (N=32768, r=8, p=1) and a random 16-byte salt per user. There's no password reset; a forgotten password needs a manual database fix.
-- Sessions are random 256-bit tokens in an HttpOnly cookie; only their SHA-256 hash is stored. Sessions last 30 days, and changing your password signs out other devices.
+- Sessions are random 256-bit tokens in an HttpOnly cookie; only their SHA-256 hash is stored. Sessions slide: using the app keeps you signed in (the expiry is pushed forward at most once an hour), a session unused for 7 days expires, and every session ends 30 days after login regardless. Settings shows how many devices are signed in and has **Sign out of all devices**; changing your password also signs out other devices.
+- Replacing or removing a saved Anthropic API key requires your current password (saving the first key doesn't).
 - After 10 wrong passwords an account is locked for 15 minutes. Login responses don't reveal whether an email has an account.
 - Anthropic API keys are checked with Anthropic when saved, then encrypted with AES-256-GCM using `ENCRYPTION_KEY`. The user's ID is bound into the encryption, so a key copied onto another user's row won't decrypt. Keys are never sent back to the browser (Settings shows only `sk-ant-…` and the last 4 characters). Someone with both the database and `ENCRYPTION_KEY` (in practice, whoever runs the deployment) can decrypt them, which is unavoidable because the daily job has to use them while users are away. Users should use a dedicated key with a spend limit.
 - Deleting an account removes its companies, scores, essays, sessions and saved key.
