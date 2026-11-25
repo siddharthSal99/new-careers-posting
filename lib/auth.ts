@@ -6,7 +6,12 @@ import { db } from "./db";
 import type { User } from "./types";
 
 const COOKIE = "jt_session";
-const SESSION_DAYS = 30;
+/** A session that isn't used for this long expires. Each use (at most hourly) pushes the expiry forward. */
+const IDLE_DAYS = 7;
+/** However much it's used, a session ends this long after logging in. */
+const MAX_SESSION_DAYS = 30;
+/** How often an active session's expiry is pushed forward (avoids a database write on every request). */
+const REFRESH_EVERY_MINUTES = 60;
 const MAX_FAILED_LOGINS = 10;
 const LOCKOUT_MINUTES = 15;
 export const MIN_PASSWORD_LENGTH = 10;
@@ -25,14 +30,29 @@ function passwordProblem(password: string): string | null {
   return null;
 }
 
+/**
+ * The signed-in user, from the session cookie. Sessions slide: a valid session's expiry is moved to
+ * IDLE_DAYS from now when it's used (at most every REFRESH_EVERY_MINUTES), capped at MAX_SESSION_DAYS
+ * after login. The database decides validity; the cookie just lasts until the cap.
+ */
 export async function currentUser(): Promise<User | null> {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
   const sql = await db();
+  const hash = sha256(token);
   const [u] = await sql`
-    select u.id, u.email from sessions s join users u on u.id = s.user_id
-    where s.token_hash = ${sha256(token)} and s.expires_at > now()`;
-  return u ? { id: u.id, email: u.email } : null;
+    select u.id, u.email, s.last_refreshed_at < now() - ${`${REFRESH_EVERY_MINUTES} minutes`}::interval as due
+    from sessions s join users u on u.id = s.user_id
+    where s.token_hash = ${hash} and s.expires_at > now()
+      and s.created_at > now() - ${`${MAX_SESSION_DAYS} days`}::interval`;
+  if (!u) return null;
+  if (u.due) {
+    await sql`
+      update sessions set last_refreshed_at = now(),
+        expires_at = least(created_at + ${`${MAX_SESSION_DAYS} days`}::interval, now() + ${`${IDLE_DAYS} days`}::interval)
+      where token_hash = ${hash}`;
+  }
+  return { id: u.id, email: u.email };
 }
 
 /**
@@ -55,12 +75,13 @@ async function startSession(userId: number) {
   const sql = await db();
   await sql`delete from sessions where user_id = ${userId} and expires_at < now()`;
   await sql`insert into sessions (token_hash, user_id, expires_at)
-            values (${sha256(token)}, ${userId}, now() + ${`${SESSION_DAYS} days`}::interval)`;
+            values (${sha256(token)}, ${userId}, now() + ${`${IDLE_DAYS} days`}::interval)`;
   (await cookies()).set(COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: SESSION_DAYS * 86_400,
+    // The cookie can't outlive the hard cap; the database enforces the idle timeout.
+    maxAge: MAX_SESSION_DAYS * 86_400,
     path: "/",
   });
 }
@@ -170,6 +191,28 @@ export async function deleteAccount(userId: number, password: string): Promise<{
   });
   (await cookies()).delete(COOKIE);
   return null;
+}
+
+/** Ends every session for the user, on every device, including this one. */
+export async function logOutEverywhere(userId: number) {
+  const sql = await db();
+  await sql`delete from sessions where user_id = ${userId}`;
+  (await cookies()).delete(COOKIE);
+}
+
+export async function activeSessionCount(userId: number): Promise<number> {
+  const sql = await db();
+  const [r] = await sql`
+    select count(*)::int as n from sessions
+    where user_id = ${userId} and expires_at > now() and created_at > now() - ${`${MAX_SESSION_DAYS} days`}::interval`;
+  return r.n;
+}
+
+/** Re-checks the user's password before a sensitive change. */
+export async function confirmPassword(userId: number, password: string): Promise<boolean> {
+  const sql = await db();
+  const [u] = await sql`select password_hash from users where id = ${userId}`;
+  return !!u && (await verifyPassword(password, u.password_hash));
 }
 
 export async function logOut() {

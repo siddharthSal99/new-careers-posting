@@ -96,6 +96,13 @@ create table if not exists sessions (
   expires_at timestamptz not null
 );
 create index if not exists sessions_user_idx on sessions (user_id);
+-- added later: sliding sessions (see lib/auth.ts); expires_at is pushed forward while the session is in use
+alter table sessions add column if not exists last_refreshed_at timestamptz not null default now();
+-- Apply the idle limit to sessions from before sliding sessions (they were issued for 30 days): no session may
+-- outlast 7 days from its last use. Sessions refreshed under the new rules already satisfy this, so it's a no-op for them.
+update sessions set expires_at = least(expires_at, last_refreshed_at + interval '7 days', created_at + interval '30 days')
+  where expires_at > least(last_refreshed_at + interval '7 days', created_at + interval '30 days');
+delete from sessions where expires_at < now();
 
 -- A user tracking a board, with their own name and department choices.
 -- Jobs first seen after created_at are "new" for this user; earlier ones are their baseline.

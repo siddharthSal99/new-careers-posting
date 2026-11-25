@@ -1,14 +1,22 @@
-import { requireUser } from "@/lib/auth";
+import { activeSessionCount, requireUser } from "@/lib/auth";
 import { encryptionProblem } from "@/lib/crypto";
 import { getSettings } from "@/lib/db";
-import { changePasswordAction, deleteAccountAction, logoutAction, removeAnthropicKeyAction, saveAnthropicKeyAction, saveSettingsAction } from "../actions";
+import {
+  changePasswordAction,
+  deleteAccountAction,
+  logOutEverywhereAction,
+  logoutAction,
+  removeAnthropicKeyAction,
+  saveAnthropicKeyAction,
+  saveSettingsAction,
+} from "../actions";
 import { ActionForm } from "../auth-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ saved?: string; welcome?: string }> }) {
   const user = await requireUser();
-  const [s, { saved, welcome }] = await Promise.all([getSettings(user.id), searchParams]);
+  const [s, { saved, welcome }, sessions] = await Promise.all([getSettings(user.id), searchParams, activeSessionCount(user.id)]);
   return (
     <>
       <h1>Settings</h1>
@@ -79,13 +87,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <ActionForm action={saveAnthropicKeyAction} submit={s.anthropicKeyHint ? "Replace key" : "Save key"} pendingText="Checking key…">
             <label htmlFor="apiKey">{s.anthropicKeyHint ? "New API key" : "API key"}</label>
             <input id="apiKey" name="apiKey" type="password" autoComplete="off" placeholder="sk-ant-…" required />
+            {s.anthropicKeyHint && (
+              <>
+                <label htmlFor="keyPassword">Your current password</label>
+                <input id="keyPassword" name="password" type="password" autoComplete="current-password" required />
+              </>
+            )}
             <p className="muted small">The key is checked with Anthropic, then stored encrypted. It's never shown again or sent back to your browser.</p>
           </ActionForm>
         )}
         {s.anthropicKeyHint && (
-          <form action={removeAnthropicKeyAction}>
-            <button type="submit" className="danger">Remove key</button>
-          </form>
+          <details style={{ marginTop: 8 }}>
+            <summary className="small error">Remove key</summary>
+            <ActionForm action={removeAnthropicKeyAction} submit="Remove key" pendingText="Removing…" danger>
+              <label htmlFor="removePassword">Your current password</label>
+              <input id="removePassword" name="password" type="password" autoComplete="current-password" required />
+            </ActionForm>
+          </details>
         )}
       </div>
 
@@ -99,9 +117,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <label htmlFor="confirm">Confirm new password</label>
           <input id="confirm" name="confirm" type="password" autoComplete="new-password" required />
         </ActionForm>
-        <form action={logoutAction}>
-          <button type="submit" className="secondary">Log out</button>
-        </form>
+        <p className="muted small">
+          You stay signed in while you use the app; a device that isn't used for 7 days is signed out, and every sign-in ends after
+          30 days. Signed in on {sessions} device{sessions === 1 ? "" : "s"} or browser{sessions === 1 ? "" : "s"}.
+        </p>
+        <div className="row">
+          <form action={logoutAction}>
+            <button type="submit" className="secondary">Log out</button>
+          </form>
+          <form action={logOutEverywhereAction}>
+            <button type="submit" className="secondary">Sign out of all devices</button>
+          </form>
+        </div>
         <details style={{ marginTop: 16 }}>
           <summary className="small error">Delete account</summary>
           <ActionForm action={deleteAccountAction} submit="Delete my account" pendingText="Deleting…" danger>
